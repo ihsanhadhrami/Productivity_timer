@@ -4,12 +4,12 @@ import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
 import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound } from './types';
-import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap } from 'lucide-react';
+import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 // Toast Notification Types
 interface ToastNotification {
   id: string;
-  type: 'focus-complete' | 'break-complete' | 'info';
+  type: 'focus-complete' | 'break-complete' | 'info' | 'success' | 'warning';
   title: string;
   message: string;
   icon: React.ReactNode;
@@ -276,6 +276,8 @@ const App: React.FC = () => {
       'focus-complete': <PartyPopper className="w-6 h-6" />,
       'break-complete': <Zap className="w-6 h-6" />,
       'info': <Coffee className="w-6 h-6" />,
+      'success': <CheckCircle2 className="w-6 h-6" />,
+      'warning': <AlertTriangle className="w-6 h-6" />,
     };
     
     const newToast: ToastNotification = {
@@ -674,7 +676,7 @@ const App: React.FC = () => {
           <button
             onClick={() => {
               resetStats();
-              alert('Today\'s stats have been reset!');
+              showToast('success', 'Stats Reset! ✨', 'Today\'s stats have been cleared successfully.');
             }}
             className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
               isDarkTheme 
@@ -693,7 +695,7 @@ const App: React.FC = () => {
             onClick={() => {
               if (confirm('Are you sure you want to clear all session history?')) {
                 clearHistory();
-                alert('Session history cleared!');
+                showToast('warning', 'History Cleared! 🗑️', 'All session records have been permanently deleted.');
               }
             }}
             className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
@@ -815,6 +817,10 @@ const App: React.FC = () => {
                   ? 'bg-gradient-to-r from-emerald-500/90 via-green-500/90 to-teal-500/90'
                   : toast.type === 'break-complete'
                   ? 'bg-gradient-to-r from-violet-500/90 via-purple-500/90 to-fuchsia-500/90'
+                  : toast.type === 'success'
+                  ? 'bg-gradient-to-r from-cyan-500/90 via-blue-500/90 to-indigo-500/90'
+                  : toast.type === 'warning'
+                  ? 'bg-gradient-to-r from-amber-500/90 via-orange-500/90 to-red-500/90'
                   : 'bg-gradient-to-r from-blue-500/90 via-cyan-500/90 to-teal-500/90'
               }`}
             >
@@ -827,6 +833,10 @@ const App: React.FC = () => {
                   ? 'bg-emerald-400'
                   : toast.type === 'break-complete'
                   ? 'bg-violet-400'
+                  : toast.type === 'success'
+                  ? 'bg-cyan-400'
+                  : toast.type === 'warning'
+                  ? 'bg-amber-400'
                   : 'bg-blue-400'
               }`} />
               
