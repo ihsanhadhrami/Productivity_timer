@@ -124,6 +124,7 @@ const App: React.FC = () => {
   // Refs for audio context and interval
   const audioContextRef = useRef<AudioContext | null>(null);
   const alarmIntervalRef = useRef<number | null>(null);
+  const sharedAudioContextRef = useRef<AudioContext | null>(null); // Persistent context for mobile
   
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -320,6 +321,33 @@ const App: React.FC = () => {
     }
   }, [showToast]);
 
+  // Unlock AudioContext for mobile browsers (must be called on user interaction)
+  const unlockAudioContext = useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      
+      // Create or resume shared context
+      if (!sharedAudioContextRef.current) {
+        sharedAudioContextRef.current = new AudioContextClass();
+      }
+      
+      // Resume if suspended (mobile browsers suspend by default)
+      if (sharedAudioContextRef.current.state === 'suspended') {
+        sharedAudioContextRef.current.resume();
+      }
+      
+      // Play silent buffer to fully unlock on iOS
+      const buffer = sharedAudioContextRef.current.createBuffer(1, 1, 22050);
+      const source = sharedAudioContextRef.current.createBufferSource();
+      source.buffer = buffer;
+      source.connect(sharedAudioContextRef.current.destination);
+      source.start(0);
+    } catch (e) {
+      console.warn('Failed to unlock AudioContext:', e);
+    }
+  }, []);
+
   // Sound generators for different notification sounds
   const playSound = useCallback((soundType: NotificationSound, preview = false) => {
     try {
@@ -329,9 +357,24 @@ const App: React.FC = () => {
         return;
       }
       
-      const audioContext = new AudioContextClass();
-      if (!preview) {
+      // Use shared context for alarm (already unlocked), new one for preview
+      let audioContext: AudioContext;
+      if (preview) {
+        audioContext = new AudioContextClass();
+      } else {
+        // Reuse shared context or create new one
+        if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
+          sharedAudioContextRef.current = new AudioContextClass();
+        }
+        audioContext = sharedAudioContextRef.current;
         audioContextRef.current = audioContext;
+      }
+      
+      // Resume if suspended (critical for mobile!)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('AudioContext resumed for playback');
+        });
       }
     
     const playMelody = () => {
@@ -768,6 +811,7 @@ const App: React.FC = () => {
                      setCustomFocusTime={setCustomFocusTime}
                      setCustomBreakTime={setCustomBreakTime}
                      isDarkTheme={isDarkTheme}
+                     onUnlockAudio={unlockAudioContext}
                    />
                 </div>
 

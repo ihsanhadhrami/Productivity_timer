@@ -18,6 +18,7 @@ interface TimerDisplayProps {
   setCustomFocusTime: (time: number) => void;
   setCustomBreakTime: (time: number) => void;
   isDarkTheme?: boolean;
+  onUnlockAudio?: () => void;
 }
 
 const TimerDisplay: React.FC<TimerDisplayProps> = ({ 
@@ -35,7 +36,8 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
   customBreakTime,
   setCustomFocusTime,
   setCustomBreakTime,
-  isDarkTheme = true
+  isDarkTheme = true,
+  onUnlockAudio
 }) => {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [tempFocus, setTempFocus] = useState(customFocusTime);
@@ -102,7 +104,10 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </div>
 
       {/* Timer Circle */}
-      <div className="relative group cursor-pointer" onClick={() => setIsRunning(!isRunning)}>
+      <div className="relative group cursor-pointer" onClick={() => {
+        onUnlockAudio?.(); // Unlock audio for mobile on user interaction
+        setIsRunning(!isRunning);
+      }}>
         {/* Outer Glow Layer */}
         <div className={`
           absolute inset-0 rounded-full transition-all duration-700 opacity-40 blur-[40px]
@@ -202,7 +207,10 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
             </button>
             
             <button
-              onClick={() => setIsRunning(!isRunning)}
+              onClick={() => {
+                onUnlockAudio?.(); // Unlock audio for mobile on user interaction
+                setIsRunning(!isRunning);
+              }}
               className={`px-8 py-4 rounded-full font-bold transition-all shadow-glow-sm hover:shadow-glow flex items-center gap-2 ${
                 isBreak 
                   ? 'bg-blue-500 hover:bg-blue-400 text-white' 
