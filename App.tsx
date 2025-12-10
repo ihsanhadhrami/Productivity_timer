@@ -125,6 +125,7 @@ const App: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const alarmIntervalRef = useRef<number | null>(null);
   const sharedAudioContextRef = useRef<AudioContext | null>(null); // Persistent context for mobile
+  const isAudioUnlockedRef = useRef<boolean>(false); // Track if audio has been unlocked
   
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -325,31 +326,52 @@ const App: React.FC = () => {
   const unlockAudioContext = useCallback(() => {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      
-      // Create or resume shared context
-      if (!sharedAudioContextRef.current) {
-        sharedAudioContextRef.current = new AudioContextClass();
+      if (!AudioContextClass) {
+        console.warn('AudioContext not supported on this device');
+        return;
       }
+      
+      // Always create fresh context if none exists or if closed
+      if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
+        sharedAudioContextRef.current = new AudioContextClass();
+        console.log('Created new AudioContext');
+      }
+      
+      const ctx = sharedAudioContextRef.current;
       
       // Resume if suspended (mobile browsers suspend by default)
-      if (sharedAudioContextRef.current.state === 'suspended') {
-        sharedAudioContextRef.current.resume();
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          console.log('AudioContext resumed successfully, state:', ctx.state);
+          isAudioUnlockedRef.current = true;
+        }).catch(e => {
+          console.warn('Failed to resume AudioContext:', e);
+        });
+      } else if (ctx.state === 'running') {
+        isAudioUnlockedRef.current = true;
       }
       
-      // Play silent buffer to fully unlock on iOS
-      const buffer = sharedAudioContextRef.current.createBuffer(1, 1, 22050);
-      const source = sharedAudioContextRef.current.createBufferSource();
-      source.buffer = buffer;
-      source.connect(sharedAudioContextRef.current.destination);
-      source.start(0);
+      // Play silent buffer to fully unlock on iOS Safari
+      // This is critical for iOS - must happen on user gesture
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+        source.stop(0.001);
+        console.log('Silent buffer played for iOS unlock');
+      } catch (bufferError) {
+        console.warn('Silent buffer error (non-critical):', bufferError);
+      }
+      
     } catch (e) {
       console.warn('Failed to unlock AudioContext:', e);
     }
   }, []);
 
   // Sound generators for different notification sounds
-  const playSound = useCallback((soundType: NotificationSound, preview = false) => {
+  const playSound = useCallback(async (soundType: NotificationSound, preview = false) => {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
@@ -357,25 +379,49 @@ const App: React.FC = () => {
         return;
       }
       
-      // Use shared context for alarm (already unlocked), new one for preview
       let audioContext: AudioContext;
+      
       if (preview) {
+        // For preview, always create new context
         audioContext = new AudioContextClass();
       } else {
-        // Reuse shared context or create new one
+        // For alarm, use or create shared context
+        // IMPORTANT: Create new context if old one is closed (from stopAlarm)
         if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
+          console.log('Creating new shared AudioContext for alarm');
           sharedAudioContextRef.current = new AudioContextClass();
         }
         audioContext = sharedAudioContextRef.current;
         audioContextRef.current = audioContext;
       }
       
-      // Resume if suspended (critical for mobile!)
+      // CRITICAL: Wait for resume to complete before playing
+      // iOS Safari will not play audio if context is suspended
       if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-          console.log('AudioContext resumed for playback');
-        });
+        console.log('AudioContext suspended, attempting resume...');
+        try {
+          await audioContext.resume();
+          console.log('AudioContext resumed, state:', audioContext.state);
+        } catch (resumeError) {
+          console.warn('Resume failed:', resumeError);
+          // Try creating a completely new context as fallback
+          if (!preview) {
+            console.log('Creating fallback AudioContext');
+            audioContext = new AudioContextClass();
+            sharedAudioContextRef.current = audioContext;
+            audioContextRef.current = audioContext;
+          }
+        }
       }
+      
+      // Double-check context is running
+      if (audioContext.state !== 'running') {
+        console.warn('AudioContext not running, state:', audioContext.state);
+        // Last resort: try resume one more time
+        await audioContext.resume();
+      }
+      
+      console.log('Playing sound:', soundType, 'Context state:', audioContext.state);
     
     const playMelody = () => {
       let notes: { freq: number; duration: number; type?: OscillatorType }[] = [];
@@ -460,14 +506,24 @@ const App: React.FC = () => {
     playMelody();
     
     if (!preview) {
-      // Repeat for alarm
+      // Repeat for alarm - check both refs and state
       alarmIntervalRef.current = window.setInterval(() => {
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        // Check if shared context exists and is usable
+        const ctx = sharedAudioContextRef.current;
+        if (ctx && ctx.state === 'running') {
           playMelody();
+        } else if (ctx && ctx.state === 'suspended') {
+          // Try to resume if suspended (can happen on iOS)
+          ctx.resume().then(() => {
+            if (ctx.state === 'running') {
+              playMelody();
+            }
+          }).catch(() => {});
         }
       }, 1500);
       
       setIsAlarmPlaying(true);
+      console.log('Alarm started, will repeat every 1.5s');
     } else {
       // For preview, close after playing once
       setTimeout(() => {
@@ -480,25 +536,66 @@ const App: React.FC = () => {
     }
     } catch (e) {
       console.warn('Failed to play sound:', e);
+      // Fallback: Try vibration on mobile devices
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200, 100, 200]);
+        console.log('Using vibration fallback');
+      }
     }
   }, []);
 
   // Play alarm with selected sound
-  const playAlarm = useCallback(() => {
-    playSound(selectedSound);
+  const playAlarm = useCallback(async () => {
+    console.log('playAlarm called, selected sound:', selectedSound);
+    
+    // Try to play sound
+    await playSound(selectedSound);
+    
+    // Also trigger vibration on mobile for extra notification
+    if ('vibrate' in navigator) {
+      navigator.vibrate([200, 100, 200]);
+    }
   }, [playSound, selectedSound]);
+  
+  // Re-unlock audio context periodically while timer is running (iOS fix)
+  useEffect(() => {
+    let keepAliveInterval: number | undefined;
+    
+    if (isRunning && sharedAudioContextRef.current) {
+      keepAliveInterval = window.setInterval(() => {
+        const ctx = sharedAudioContextRef.current;
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+      }, 5000); // Check every 5 seconds
+    }
+    
+    return () => {
+      if (keepAliveInterval) {
+        clearInterval(keepAliveInterval);
+      }
+    };
+  }, [isRunning]);
+
 
   // Stop alarm sound
   const stopAlarm = useCallback(() => {
     try {
+      // Clear the repeating interval
       if (alarmIntervalRef.current) {
         clearInterval(alarmIntervalRef.current);
         alarmIntervalRef.current = null;
+        console.log('Alarm interval cleared');
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
+      
+      // DON'T close the shared AudioContext - we want to reuse it!
+      // Just clear the reference to the current alarm context
+      // This fixes the issue where audio won't play after stopping alarm
+      audioContextRef.current = null;
+      
+      // Note: We intentionally don't close sharedAudioContextRef
+      // because closing it would require user interaction to unlock again
+      
     } catch (e) {
       console.warn('Error stopping alarm:', e);
     }
