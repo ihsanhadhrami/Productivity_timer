@@ -38,6 +38,34 @@ const NOTIFICATION_SOUNDS: { id: NotificationSound; name: string; description: s
 // Get today's date string for daily tracking
 const getTodayKey = () => new Date().toISOString().split('T')[0];
 
+// Safe localStorage helpers with error handling
+const safeGetItem = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn(`Failed to read from localStorage: ${key}`, e);
+    return null;
+  }
+};
+
+const safeSetItem = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`Failed to write to localStorage: ${key}`, e);
+  }
+};
+
+const safeParseJSON = <T,>(json: string | null, fallback: T): T => {
+  if (!json) return fallback;
+  try {
+    return JSON.parse(json) as T;
+  } catch (e) {
+    console.warn('Failed to parse JSON:', e);
+    return fallback;
+  }
+};
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mode, setMode] = useState<FocusMode>(FocusMode.S1);
@@ -47,18 +75,18 @@ const App: React.FC = () => {
   
   // Theme state
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.theme);
+    const saved = safeGetItem(STORAGE_KEYS.theme);
     return saved !== 'light';
   });
   
   // Streak counter
   const [streak, setStreak] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.streak);
-    return saved ? parseInt(saved) : 0;
+    const saved = safeGetItem(STORAGE_KEYS.streak);
+    return saved ? parseInt(saved, 10) || 0 : 0;
   });
   
   const [lastActiveDate, setLastActiveDate] = useState(() => {
-    return localStorage.getItem(STORAGE_KEYS.lastActiveDate) || '';
+    return safeGetItem(STORAGE_KEYS.lastActiveDate) || '';
   });
   
   // Custom timer settings
@@ -67,20 +95,21 @@ const App: React.FC = () => {
   
   // Notification sound
   const [selectedSound, setSelectedSound] = useState<NotificationSound>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.notificationSound);
-    return (saved as NotificationSound) || 'crystals';
+    const saved = safeGetItem(STORAGE_KEYS.notificationSound);
+    const validSounds: NotificationSound[] = ['crystals', 'chime', 'pulse', 'bell', 'synth'];
+    return validSounds.includes(saved as NotificationSound) ? (saved as NotificationSound) : 'crystals';
   });
   
   // Focus task
   const [focusTask, setFocusTask] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.focusTask);
+    const saved = safeGetItem(STORAGE_KEYS.focusTask);
     return saved || 'What are you working on?';
   });
   
   // Session history
   const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.history);
-    return saved ? JSON.parse(saved) : [];
+    const saved = safeGetItem(STORAGE_KEYS.history);
+    return safeParseJSON<SessionHistory[]>(saved, []);
   });
   
   // Refs for audio context and interval
@@ -98,15 +127,8 @@ const App: React.FC = () => {
 
   // Stats with localStorage
   const [stats, setStats] = useState<SessionStats>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.stats);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Check if stats are from today
-      if (parsed.date === getTodayKey()) {
-        return parsed;
-      }
-    }
-    return {
+    const saved = safeGetItem(STORAGE_KEYS.stats);
+    const defaultStats: SessionStats = {
       s1Count: 0,
       s2Count: 0,
       customCount: 0,
@@ -114,41 +136,47 @@ const App: React.FC = () => {
       dailyGoal: 5,
       date: getTodayKey()
     };
+    const parsed = safeParseJSON<SessionStats>(saved, defaultStats);
+    // Check if stats are from today
+    if (parsed.date === getTodayKey()) {
+      return parsed;
+    }
+    return defaultStats;
   });
 
   // Save to localStorage when stats change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.stats, JSON.stringify(stats));
+    safeSetItem(STORAGE_KEYS.stats, JSON.stringify(stats));
   }, [stats]);
 
   // Save focus task to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.focusTask, focusTask);
+    safeSetItem(STORAGE_KEYS.focusTask, focusTask);
   }, [focusTask]);
 
   // Save session history to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(sessionHistory));
+    safeSetItem(STORAGE_KEYS.history, JSON.stringify(sessionHistory));
   }, [sessionHistory]);
 
   // Save selected sound to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.notificationSound, selectedSound);
+    safeSetItem(STORAGE_KEYS.notificationSound, selectedSound);
   }, [selectedSound]);
 
   // Save theme to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.theme, isDarkTheme ? 'dark' : 'light');
+    safeSetItem(STORAGE_KEYS.theme, isDarkTheme ? 'dark' : 'light');
   }, [isDarkTheme]);
 
   // Save streak to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.streak, streak.toString());
+    safeSetItem(STORAGE_KEYS.streak, streak.toString());
   }, [streak]);
 
   // Save last active date
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.lastActiveDate, lastActiveDate);
+    safeSetItem(STORAGE_KEYS.lastActiveDate, lastActiveDate);
   }, [lastActiveDate]);
 
   // Check and update streak on app load and when completing a session
@@ -232,21 +260,32 @@ const App: React.FC = () => {
 
   // Send browser notification
   const sendNotification = useCallback((title: string, body: string) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, {
-        body,
-        icon: '/favicon.ico',
-        tag: 'timer-notification',
-      });
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: 'timer-notification',
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to send notification:', e);
     }
   }, []);
 
   // Sound generators for different notification sounds
   const playSound = useCallback((soundType: NotificationSound, preview = false) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    if (!preview) {
-      audioContextRef.current = audioContext;
-    }
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) {
+        console.warn('AudioContext not supported');
+        return;
+      }
+      
+      const audioContext = new AudioContextClass();
+      if (!preview) {
+        audioContextRef.current = audioContext;
+      }
     
     const playMelody = () => {
       let notes: { freq: number; duration: number; type?: OscillatorType }[] = [];
@@ -342,8 +381,15 @@ const App: React.FC = () => {
     } else {
       // For preview, close after playing once
       setTimeout(() => {
-        audioContext.close();
+        try {
+          audioContext.close();
+        } catch (e) {
+          // Ignore close errors
+        }
       }, 2000);
+    }
+    } catch (e) {
+      console.warn('Failed to play sound:', e);
     }
   }, []);
 
@@ -354,13 +400,17 @@ const App: React.FC = () => {
 
   // Stop alarm sound
   const stopAlarm = useCallback(() => {
-    if (alarmIntervalRef.current) {
-      clearInterval(alarmIntervalRef.current);
-      alarmIntervalRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
+    try {
+      if (alarmIntervalRef.current) {
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    } catch (e) {
+      console.warn('Error stopping alarm:', e);
     }
     setIsAlarmPlaying(false);
   }, []);

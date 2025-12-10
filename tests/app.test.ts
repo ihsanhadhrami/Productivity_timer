@@ -646,10 +646,10 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
     });
 
     it('should detect new day and reset daily stats', () => {
-      const storedDate = '2025-12-09';
-      const today = '2025-12-10';
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
       
-      const shouldReset = storedDate !== today;
+      const shouldReset = yesterday !== today;
       expect(shouldReset).toBe(true);
     });
 
@@ -659,8 +659,9 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       };
       
-      const time = formatTime('2025-12-10T14:30:00.000Z');
+      const time = formatTime(new Date().toISOString());
       expect(time).toBeDefined();
+      expect(time).toMatch(/^\d{1,2}:\d{2}\s?(AM|PM)?$/i);
     });
   });
 
