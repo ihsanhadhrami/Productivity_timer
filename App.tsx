@@ -4,7 +4,16 @@ import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
 import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound } from './types';
-import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame } from 'lucide-react';
+import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap } from 'lucide-react';
+
+// Toast Notification Types
+interface ToastNotification {
+  id: string;
+  type: 'focus-complete' | 'break-complete' | 'info';
+  title: string;
+  message: string;
+  icon: React.ReactNode;
+}
 
 // Timer configurations
 const TIMER_CONFIG = {
@@ -115,6 +124,9 @@ const App: React.FC = () => {
   // Refs for audio context and interval
   const audioContextRef = useRef<AudioContext | null>(null);
   const alarmIntervalRef = useRef<number | null>(null);
+  
+  // Toast notifications state
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
   
   // Timer State
   const getInitialTime = (m: FocusMode, p: TimerPhase) => {
@@ -258,8 +270,41 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Show toast notification
+  const showToast = useCallback((type: ToastNotification['type'], title: string, message: string) => {
+    const icons: Record<ToastNotification['type'], React.ReactNode> = {
+      'focus-complete': <PartyPopper className="w-6 h-6" />,
+      'break-complete': <Zap className="w-6 h-6" />,
+      'info': <Coffee className="w-6 h-6" />,
+    };
+    
+    const newToast: ToastNotification = {
+      id: Date.now().toString(),
+      type,
+      title,
+      message,
+      icon: icons[type],
+    };
+    
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== newToast.id));
+    }, 5000);
+  }, []);
+  
+  // Dismiss toast
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   // Send browser notification
-  const sendNotification = useCallback((title: string, body: string) => {
+  const sendNotification = useCallback((title: string, body: string, type: ToastNotification['type'] = 'info') => {
+    // Show in-app toast
+    showToast(type, title, body);
+    
+    // Also send browser notification
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(title, {
@@ -271,7 +316,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.warn('Failed to send notification:', e);
     }
-  }, []);
+  }, [showToast]);
 
   // Sound generators for different notification sounds
   const playSound = useCallback((soundType: NotificationSound, preview = false) => {
@@ -444,7 +489,7 @@ const App: React.FC = () => {
       if (phase === TimerPhase.FOCUS) {
         // Focus completed, play alarm and switch to break
         playAlarm();
-        sendNotification('Focus Complete! 🎉', `Great job! Time for a break. Task: ${focusTask}`);
+        sendNotification('Focus Complete! 🎉', `Great job! Time for a break.`, 'focus-complete');
         
         const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 20 : customFocusTime;
         
@@ -467,7 +512,7 @@ const App: React.FC = () => {
       } else {
         // Break completed - STOP completely and play alarm
         playAlarm();
-        sendNotification('Break Over! 💪', 'Ready for another focus session?');
+        sendNotification('Break Over! 💪', 'Ready for another focus session?', 'break-complete');
         setIsRunning(false); // Stop after break, session complete
       }
     }
@@ -752,6 +797,141 @@ const App: React.FC = () => {
           </>
         )}
       </main>
+      
+      {/* Toast Notifications */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+        {toasts.map((toast, index) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto animate-slide-in"
+            style={{
+              animation: 'slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              animationDelay: `${index * 50}ms`,
+            }}
+          >
+            <div
+              className={`relative overflow-hidden rounded-2xl shadow-2xl backdrop-blur-xl min-w-[320px] max-w-[400px] ${
+                toast.type === 'focus-complete'
+                  ? 'bg-gradient-to-r from-emerald-500/90 via-green-500/90 to-teal-500/90'
+                  : toast.type === 'break-complete'
+                  ? 'bg-gradient-to-r from-violet-500/90 via-purple-500/90 to-fuchsia-500/90'
+                  : 'bg-gradient-to-r from-blue-500/90 via-cyan-500/90 to-teal-500/90'
+              }`}
+            >
+              {/* Shimmer effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer" />
+              
+              {/* Glow effect */}
+              <div className={`absolute -inset-1 blur-xl opacity-50 ${
+                toast.type === 'focus-complete'
+                  ? 'bg-emerald-400'
+                  : toast.type === 'break-complete'
+                  ? 'bg-violet-400'
+                  : 'bg-blue-400'
+              }`} />
+              
+              <div className="relative p-4 flex items-start gap-4">
+                {/* Icon with pulse */}
+                <div className={`flex-shrink-0 p-3 rounded-xl bg-white/20 backdrop-blur-sm ${
+                  toast.type === 'focus-complete' ? 'animate-bounce-soft' : 'animate-pulse-soft'
+                }`}>
+                  <div className="text-white drop-shadow-lg">
+                    {toast.icon}
+                  </div>
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0 pt-1">
+                  <h4 className="text-white font-bold text-lg tracking-tight drop-shadow-sm">
+                    {toast.title}
+                  </h4>
+                  <p className="text-white/90 text-sm mt-0.5 leading-relaxed">
+                    {toast.message}
+                  </p>
+                </div>
+                
+                {/* Close button */}
+                <button
+                  onClick={() => dismissToast(toast.id)}
+                  className="flex-shrink-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 hover:scale-110 active:scale-95 group"
+                >
+                  <X className="w-4 h-4 text-white/80 group-hover:text-white transition-colors" />
+                </button>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="h-1 bg-black/10">
+                <div 
+                  className="h-full bg-white/40 animate-progress"
+                  style={{ animation: 'progress 5s linear forwards' }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {/* Toast Animation Styles */}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(100%) scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+        
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(200%);
+          }
+        }
+        
+        @keyframes progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        
+        @keyframes bounce-soft {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-4px);
+          }
+        }
+        
+        @keyframes pulse-soft {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.8;
+          }
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 2s ease-in-out infinite;
+        }
+        
+        .animate-bounce-soft {
+          animation: bounce-soft 1s ease-in-out infinite;
+        }
+        
+        .animate-pulse-soft {
+          animation: pulse-soft 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };
