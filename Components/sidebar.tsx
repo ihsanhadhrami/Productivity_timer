@@ -20,14 +20,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isDarkTheme 
         : 'bg-white/60 border-stone-200/60'
     }`}>
       <div className="flex md:flex-col gap-1 w-full justify-evenly md:justify-start items-center">
-        {/* Logo/Brand */}
-        <div className={`hidden md:flex w-10 h-10 rounded-xl mb-12 items-center justify-center shadow-inner ${
-          isDarkTheme 
-            ? 'bg-gradient-to-br from-slate-700 to-slate-800' 
-            : 'bg-gradient-to-br from-stone-200 to-stone-300'
-        }`}>
+        {/* Logo/Brand - Click to refresh */}
+        <button 
+          onClick={() => window.location.reload()}
+          className={`hidden md:flex w-10 h-10 rounded-xl mb-12 items-center justify-center shadow-inner transition-transform hover:scale-110 active:scale-95 ${
+            isDarkTheme 
+              ? 'bg-gradient-to-br from-slate-700 to-slate-800' 
+              : 'bg-gradient-to-br from-stone-200 to-stone-300'
+          }`}
+          title="Refresh page"
+        >
            <span className="text-accent font-bold text-xl shadow-glow-sm">I</span>
-        </div>
+        </button>
 
         {menuItems.map((item) => {
           const Icon = item.icon;
