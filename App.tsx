@@ -127,6 +127,10 @@ const App: React.FC = () => {
   const sharedAudioContextRef = useRef<AudioContext | null>(null); // Persistent context for mobile
   const isAudioUnlockedRef = useRef<boolean>(false); // Track if audio has been unlocked
   
+  // Web Worker and Wake Lock refs for background timer
+  const timerWorkerRef = useRef<Worker | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   
@@ -618,15 +622,105 @@ const App: React.FC = () => {
     updateStreak();
   }, [focusTask, updateStreak]);
 
-  // Timer Logic
+  // Initialize Web Worker for background timer
   useEffect(() => {
-    let interval: number | undefined;
+    // Create worker
+    try {
+      timerWorkerRef.current = new Worker('/timer-worker.js');
+      console.log('Timer Web Worker initialized');
+      
+      // Handle messages from worker
+      timerWorkerRef.current.onmessage = (e) => {
+        const { type, timeLeft: workerTimeLeft } = e.data;
+        
+        if (type === 'TICK') {
+          setTimeLeft(workerTimeLeft);
+        } else if (type === 'COMPLETE') {
+          // Timer completed - this will be handled by the useEffect below
+          setTimeLeft(0);
+        }
+      };
+      
+      timerWorkerRef.current.onerror = (error) => {
+        console.warn('Timer Worker error:', error);
+      };
+    } catch (e) {
+      console.warn('Web Worker not supported, using fallback timer');
+    }
+    
+    return () => {
+      if (timerWorkerRef.current) {
+        timerWorkerRef.current.terminate();
+        timerWorkerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Wake Lock API - Prevent screen from turning off while timer is running
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('Wake Lock activated - screen will stay on');
+        
+        if (wakeLockRef.current) {
+          wakeLockRef.current.addEventListener('release', () => {
+            console.log('Wake Lock released');
+          });
+        }
+      } catch (e) {
+        console.warn('Wake Lock request failed:', e);
+      }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
+      console.log('Wake Lock manually released');
+    }
+  }, []);
+
+  // Re-acquire wake lock when page becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isRunning) {
+        requestWakeLock();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRunning, requestWakeLock]);
+
+  // Timer Logic - Use Web Worker if available, fallback to setInterval
+  useEffect(() => {
+    let fallbackInterval: number | undefined;
 
     if (isRunning && timeLeft > 0) {
-      interval = window.setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (isRunning && timeLeft === 0) {
+      // Request wake lock to keep screen on
+      requestWakeLock();
+      
+      if (timerWorkerRef.current) {
+        // Use Web Worker for accurate background timing
+        timerWorkerRef.current.postMessage({ type: 'START', payload: { timeLeft } });
+      } else {
+        // Fallback to regular interval
+        fallbackInterval = window.setInterval(() => {
+          setTimeLeft((prev) => prev - 1);
+        }, 1000);
+      }
+    } else if (!isRunning) {
+      // Pause or stop
+      if (timerWorkerRef.current) {
+        timerWorkerRef.current.postMessage({ type: 'PAUSE' });
+      }
+      releaseWakeLock();
+    }
+    
+    // Handle timer completion
+    if (isRunning && timeLeft === 0) {
       // Timer completed - switch phase
       if (phase === TimerPhase.FOCUS) {
         // Focus completed, play alarm and switch to break
@@ -657,10 +751,14 @@ const App: React.FC = () => {
         sendNotification('Break Over! 💪', 'Ready for another focus session?', 'break-complete');
         setIsRunning(false); // Stop after break, session complete
       }
+      
+      releaseWakeLock();
     }
 
-    return () => clearInterval(interval);
-  }, [isRunning, timeLeft, mode, phase, playAlarm, sendNotification, focusTask, customFocusTime, customBreakTime, addToHistory]);
+    return () => {
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
+  }, [isRunning, timeLeft, mode, phase, playAlarm, sendNotification, focusTask, customFocusTime, customBreakTime, addToHistory, requestWakeLock, releaseWakeLock]);
 
   // Function to skip to next phase
   const skipPhase = () => {
@@ -668,18 +766,34 @@ const App: React.FC = () => {
       setPhase(TimerPhase.BREAK);
       const breakTime = mode === FocusMode.CUSTOM ? customBreakTime * 60 : TIMER_CONFIG[mode].break;
       setTimeLeft(breakTime);
+      // Sync with worker
+      if (timerWorkerRef.current) {
+        timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: breakTime } });
+      }
     } else {
       // Reset to focus for new session
       setPhase(TimerPhase.FOCUS);
-      setTimeLeft(getInitialTime(mode, TimerPhase.FOCUS));
+      const focusTime = getInitialTime(mode, TimerPhase.FOCUS);
+      setTimeLeft(focusTime);
+      // Sync with worker
+      if (timerWorkerRef.current) {
+        timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: focusTime } });
+      }
     }
     setIsRunning(false);
+    releaseWakeLock();
   };
 
   // Function to reset current phase
   const resetTimer = () => {
-    setTimeLeft(getInitialTime(mode, phase));
+    const newTime = getInitialTime(mode, phase);
+    setTimeLeft(newTime);
     setIsRunning(false);
+    // Sync with worker
+    if (timerWorkerRef.current) {
+      timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: newTime } });
+    }
+    releaseWakeLock();
   };
 
   // Function to reset all stats
