@@ -472,26 +472,26 @@ const App: React.FC = () => {
 
   // Settings Page Component
   const SettingsPage = () => (
-    <div className={`max-w-2xl mx-auto p-6 md:p-10 ${!isDarkTheme ? 'text-gray-900' : ''}`}>
-      <h1 className={`text-2xl font-bold mb-8 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>Settings</h1>
+    <div className={`max-w-2xl mx-auto p-6 md:p-10 ${isDarkTheme ? '' : 'text-stone-800'}`}>
+      <h1 className={`text-3xl font-bold mb-8 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>Settings</h1>
       
       {/* Streak Display */}
-      <div className={`${isDarkTheme ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/30' : 'bg-gradient-to-r from-orange-100 to-red-100 border-orange-300'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
+      <div className={`${isDarkTheme ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/30' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className={`w-14 h-14 rounded-2xl ${isDarkTheme ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-orange-400 to-red-400'} flex items-center justify-center shadow-lg`}>
               <Flame size={28} className="text-white" />
             </div>
             <div>
-              <p className={`text-sm ${isDarkTheme ? 'text-orange-300' : 'text-orange-600'} font-medium`}>Current Streak</p>
-              <p className={`text-3xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>{streak} {streak === 1 ? 'day' : 'days'}</p>
+              <p className={`text-sm ${isDarkTheme ? 'text-orange-300' : 'text-orange-600/80'} font-medium`}>Current Streak</p>
+              <p className={`text-3xl font-bold ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>{streak} {streak === 1 ? 'day' : 'days'}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className={`text-xs ${isDarkTheme ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-xs ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>
               {streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '💪 Keep going!' : '🌱 Building momentum!'}
             </p>
-            <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-gray-400'} mt-1`}>
+            <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'} mt-1`}>
               Complete sessions daily to maintain streak
             </p>
           </div>
@@ -499,15 +499,15 @@ const App: React.FC = () => {
       </div>
 
       {/* Theme Toggle */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
           {isDarkTheme ? <Moon size={20} className="text-blue-400" /> : <Sun size={20} className="text-yellow-500" />}
           Appearance
         </h2>
         <div className="flex items-center justify-between">
           <div>
-            <p className={`font-medium ${isDarkTheme ? 'text-slate-200' : 'text-gray-700'}`}>Theme</p>
-            <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
+            <p className={`font-medium ${isDarkTheme ? 'text-slate-200' : 'text-stone-700'}`}>Theme</p>
+            <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
               {isDarkTheme ? 'Dark mode enabled' : 'Light mode enabled'}
             </p>
           </div>
@@ -533,12 +533,12 @@ const App: React.FC = () => {
       </div>
 
       {/* Notification Sounds */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
           <Volume2 size={20} className="text-accent" />
           Notification Sound
         </h2>
-        <p className={`text-sm mb-4 ${isDarkTheme ? 'text-slate-400' : 'text-gray-500'}`}>Choose your preferred alarm sound</p>
+        <p className={`text-sm mb-4 ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>Choose your preferred alarm sound</p>
         
         <div className="space-y-3">
           {NOTIFICATION_SOUNDS.map((sound) => (
@@ -550,15 +550,15 @@ const App: React.FC = () => {
               }}
               className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
                 selectedSound === sound.id
-                  ? 'bg-accent/10 border-accent/30 text-white'
+                  ? isDarkTheme ? 'bg-accent/10 border-accent/30 text-white' : 'bg-emerald-50 border-emerald-300/50 text-stone-800'
                   : isDarkTheme 
                     ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
-                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                    : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-stone-100/80'
               }`}
             >
               <div className="text-left">
                 <p className="font-medium">{sound.name}</p>
-                <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>{sound.description}</p>
+                <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>{sound.description}</p>
               </div>
               {selectedSound === sound.id && (
                 <Check size={20} className="text-accent" />
@@ -569,8 +569,8 @@ const App: React.FC = () => {
       </div>
 
       {/* Data Management */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 shadow-sm`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
           <Trash2 size={20} className="text-red-400" />
           Data Management
         </h2>
@@ -584,12 +584,12 @@ const App: React.FC = () => {
             className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
               isDarkTheme 
                 ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
-                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-stone-100/80'
             }`}
           >
             <div className="text-left">
               <p className="font-medium">Reset Today's Stats</p>
-              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>Clear session count and focus time for today</p>
+              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>Clear session count and focus time for today</p>
             </div>
             <RotateCcw size={18} />
           </button>
@@ -604,12 +604,12 @@ const App: React.FC = () => {
             className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
               isDarkTheme 
                 ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-red-500/10 hover:border-red-500/20'
-                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200'
+                : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-red-50/80 hover:border-red-300/60'
             }`}
           >
             <div className="text-left">
               <p className="font-medium">Clear All History</p>
-              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>Permanently delete all session records</p>
+              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>Permanently delete all session records</p>
             </div>
             <Trash2 size={18} className="text-red-400" />
           </button>
@@ -617,7 +617,7 @@ const App: React.FC = () => {
       </div>
 
       {/* App Info */}
-      <div className={`mt-8 text-center text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
+      <div className={`mt-8 text-center text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
         <p>Ihsan Productivity Timer v1.1</p>
         <p className="mt-1">Built with ❤️ for deep work</p>
       </div>
@@ -625,10 +625,10 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className={`min-h-screen ${isDarkTheme ? 'bg-gradient-to-br from-[#020617] via-[#050608] to-[#0a0f1c]' : 'bg-gradient-to-br from-gray-100 via-white to-gray-50'} text-white flex flex-col md:flex-row font-sans selection:bg-accent selection:text-black overflow-hidden`}>
+    <div className={`min-h-screen ${isDarkTheme ? 'bg-gradient-to-br from-[#020617] via-[#050608] to-[#0a0f1c]' : 'bg-gradient-to-br from-stone-100 via-amber-50/30 to-stone-50'} text-white flex flex-col md:flex-row font-sans selection:bg-accent selection:text-black overflow-hidden`}>
       
       {/* Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDarkTheme={isDarkTheme} />
       
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
@@ -648,7 +648,7 @@ const App: React.FC = () => {
         ) : (
           /* Dashboard / Timer Page */
           <>
-            <Header focusTask={focusTask} setFocusTask={setFocusTask} />
+            <Header focusTask={focusTask} setFocusTask={setFocusTask} isDarkTheme={isDarkTheme} />
             
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
               <div className="max-w-[1600px] mx-auto p-6 md:p-10 min-h-full flex flex-col lg:flex-row gap-8 lg:items-center justify-center">
@@ -670,6 +670,7 @@ const App: React.FC = () => {
                      customBreakTime={customBreakTime}
                      setCustomFocusTime={setCustomFocusTime}
                      setCustomBreakTime={setCustomBreakTime}
+                     isDarkTheme={isDarkTheme}
                    />
                 </div>
 
@@ -684,6 +685,7 @@ const App: React.FC = () => {
                      onClearHistory={clearHistory}
                      focusTask={focusTask}
                      streak={streak}
+                     isDarkTheme={isDarkTheme}
                    />
                 </div>
 
@@ -691,11 +693,11 @@ const App: React.FC = () => {
             </div>
             
             {/* Keyboard Shortcuts Hint */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-4 text-xs text-slate-500">
-              <span><kbd className="px-1.5 py-0.5 bg-white/5 rounded border border-white/10">Space</kbd> Start/Pause</span>
-              <span><kbd className="px-1.5 py-0.5 bg-white/5 rounded border border-white/10">R</kbd> Reset</span>
-              <span><kbd className="px-1.5 py-0.5 bg-white/5 rounded border border-white/10">S</kbd> Skip</span>
-              <span><kbd className="px-1.5 py-0.5 bg-white/5 rounded border border-white/10">Esc</kbd> Stop Alarm</span>
+            <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-4 text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
+              <span><kbd className={`px-1.5 py-0.5 rounded border ${isDarkTheme ? 'bg-white/5 border-white/10' : 'bg-stone-200/80 border-stone-300/60'}`}>Space</kbd> Start/Pause</span>
+              <span><kbd className={`px-1.5 py-0.5 rounded border ${isDarkTheme ? 'bg-white/5 border-white/10' : 'bg-stone-200/80 border-stone-300/60'}`}>R</kbd> Reset</span>
+              <span><kbd className={`px-1.5 py-0.5 rounded border ${isDarkTheme ? 'bg-white/5 border-white/10' : 'bg-stone-200/80 border-stone-300/60'}`}>S</kbd> Skip</span>
+              <span><kbd className={`px-1.5 py-0.5 rounded border ${isDarkTheme ? 'bg-white/5 border-white/10' : 'bg-stone-200/80 border-stone-300/60'}`}>Esc</kbd> Stop Alarm</span>
             </div>
           </>
         )}

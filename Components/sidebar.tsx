@@ -4,19 +4,28 @@ import { LayoutGrid, Settings } from 'lucide-react';
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isDarkTheme?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isDarkTheme = true }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutGrid, label: 'Timer' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 w-full md:w-20 md:h-screen md:static bg-surface/50 backdrop-blur-md border-t md:border-t-0 md:border-r border-white/5 flex md:flex-col justify-between items-center py-4 md:py-8 z-50">
+    <nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-screen md:static backdrop-blur-md border-t md:border-t-0 md:border-r flex md:flex-col justify-between items-center py-4 md:py-8 z-50 ${
+      isDarkTheme 
+        ? 'bg-surface/50 border-white/5' 
+        : 'bg-white/60 border-stone-200/60'
+    }`}>
       <div className="flex md:flex-col gap-1 w-full justify-evenly md:justify-start items-center">
         {/* Logo/Brand */}
-        <div className="hidden md:flex w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl mb-12 items-center justify-center shadow-inner">
+        <div className={`hidden md:flex w-10 h-10 rounded-xl mb-12 items-center justify-center shadow-inner ${
+          isDarkTheme 
+            ? 'bg-gradient-to-br from-slate-700 to-slate-800' 
+            : 'bg-gradient-to-br from-stone-200 to-stone-300'
+        }`}>
            <span className="text-accent font-bold text-xl shadow-glow-sm">I</span>
         </div>
 
@@ -29,7 +38,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
               onClick={() => setActiveTab(item.id)}
               className={`
                 group relative p-3 rounded-xl transition-all duration-300 ease-out
-                ${isActive ? 'text-accent' : 'text-slate-500 hover:text-slate-300'}
+                ${isActive 
+                  ? 'text-accent' 
+                  : isDarkTheme 
+                    ? 'text-slate-500 hover:text-slate-300' 
+                    : 'text-stone-400 hover:text-stone-600'
+                }
               `}
               aria-label={item.id}
             >
