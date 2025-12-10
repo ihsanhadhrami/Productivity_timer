@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check } from 'lucide-react';
+import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check, Flame } from 'lucide-react';
 import { SessionStats, SessionHistory } from '../types';
 import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis } from 'recharts';
 
@@ -11,6 +11,7 @@ interface StatsPanelProps {
   onUpdateDailyGoal: (goal: number) => void;
   onClearHistory: () => void;
   focusTask: string;
+  streak?: number;
 }
 
 const StatsPanel: React.FC<StatsPanelProps> = ({ 
@@ -20,7 +21,8 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
   onResetStats,
   onUpdateDailyGoal,
   onClearHistory,
-  focusTask
+  focusTask,
+  streak = 0
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
@@ -68,6 +70,12 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
              <Target size={14} className="text-blue-400" />
              <span>{totalSessions} sessions</span>
            </div>
+           {streak > 0 && (
+             <div className="flex items-center gap-2 text-sm text-orange-300 bg-orange-500/10 px-3 py-1.5 rounded-lg border border-orange-500/20">
+               <Flame size={14} className="text-orange-400" />
+               <span>{streak} day{streak > 1 ? 's' : ''}</span>
+             </div>
+           )}
         </div>
 
         {/* Session Breakdown */}

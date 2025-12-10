@@ -4,7 +4,7 @@ import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
 import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound } from './types';
-import { Volume2, Check, RotateCcw, Trash2 } from 'lucide-react';
+import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame } from 'lucide-react';
 
 // Timer configurations
 const TIMER_CONFIG = {
@@ -22,6 +22,8 @@ const STORAGE_KEYS = {
   theme: 'ihsan_theme',
   dailyGoal: 'ihsan_daily_goal',
   notificationSound: 'ihsan_notification_sound',
+  streak: 'ihsan_streak',
+  lastActiveDate: 'ihsan_last_active_date',
 };
 
 // Notification Sound Options
@@ -42,7 +44,22 @@ const App: React.FC = () => {
   const [phase, setPhase] = useState<TimerPhase>(TimerPhase.FOCUS);
   const [isRunning, setIsRunning] = useState(false);
   const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
-  const isDarkTheme = true; // Dark theme only for now
+  
+  // Theme state
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.theme);
+    return saved !== 'light';
+  });
+  
+  // Streak counter
+  const [streak, setStreak] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.streak);
+    return saved ? parseInt(saved) : 0;
+  });
+  
+  const [lastActiveDate, setLastActiveDate] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.lastActiveDate) || '';
+  });
   
   // Custom timer settings
   const [customFocusTime, setCustomFocusTime] = useState(25);
@@ -118,6 +135,47 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.notificationSound, selectedSound);
   }, [selectedSound]);
+
+  // Save theme to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.theme, isDarkTheme ? 'dark' : 'light');
+  }, [isDarkTheme]);
+
+  // Save streak to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.streak, streak.toString());
+  }, [streak]);
+
+  // Save last active date
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.lastActiveDate, lastActiveDate);
+  }, [lastActiveDate]);
+
+  // Check and update streak on app load and when completing a session
+  const updateStreak = useCallback(() => {
+    const today = getTodayKey();
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    if (lastActiveDate === today) {
+      // Already active today, streak continues
+      return;
+    } else if (lastActiveDate === yesterday) {
+      // Was active yesterday, increment streak
+      setStreak(prev => prev + 1);
+    } else if (lastActiveDate === '') {
+      // First time user
+      setStreak(1);
+    } else {
+      // Streak broken, reset to 1
+      setStreak(1);
+    }
+    setLastActiveDate(today);
+  }, [lastActiveDate]);
+
+  // Toggle theme
+  const toggleTheme = () => {
+    setIsDarkTheme(prev => !prev);
+  };
 
   // Reset timer when mode changes
   useEffect(() => {
@@ -318,7 +376,10 @@ const App: React.FC = () => {
       date: getTodayKey()
     };
     setSessionHistory(prev => [newSession, ...prev].slice(0, 100)); // Keep last 100 sessions
-  }, [focusTask]);
+    
+    // Update streak when completing a session
+    updateStreak();
+  }, [focusTask, updateStreak]);
 
   // Timer Logic
   useEffect(() => {
@@ -411,16 +472,73 @@ const App: React.FC = () => {
 
   // Settings Page Component
   const SettingsPage = () => (
-    <div className="max-w-2xl mx-auto p-6 md:p-10">
-      <h1 className="text-2xl font-bold text-white mb-8">Settings</h1>
+    <div className={`max-w-2xl mx-auto p-6 md:p-10 ${!isDarkTheme ? 'text-gray-900' : ''}`}>
+      <h1 className={`text-2xl font-bold mb-8 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>Settings</h1>
       
+      {/* Streak Display */}
+      <div className={`${isDarkTheme ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/30' : 'bg-gradient-to-r from-orange-100 to-red-100 border-orange-300'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`w-14 h-14 rounded-2xl ${isDarkTheme ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-orange-400 to-red-400'} flex items-center justify-center shadow-lg`}>
+              <Flame size={28} className="text-white" />
+            </div>
+            <div>
+              <p className={`text-sm ${isDarkTheme ? 'text-orange-300' : 'text-orange-600'} font-medium`}>Current Streak</p>
+              <p className={`text-3xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>{streak} {streak === 1 ? 'day' : 'days'}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className={`text-xs ${isDarkTheme ? 'text-slate-400' : 'text-gray-500'}`}>
+              {streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '💪 Keep going!' : '🌱 Building momentum!'}
+            </p>
+            <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-gray-400'} mt-1`}>
+              Complete sessions daily to maintain streak
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Theme Toggle */}
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+          {isDarkTheme ? <Moon size={20} className="text-blue-400" /> : <Sun size={20} className="text-yellow-500" />}
+          Appearance
+        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`font-medium ${isDarkTheme ? 'text-slate-200' : 'text-gray-700'}`}>Theme</p>
+            <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
+              {isDarkTheme ? 'Dark mode enabled' : 'Light mode enabled'}
+            </p>
+          </div>
+          <button
+            onClick={toggleTheme}
+            className={`relative w-16 h-9 rounded-full transition-all duration-300 ${
+              isDarkTheme 
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-500' 
+                : 'bg-gradient-to-r from-yellow-400 to-orange-400'
+            }`}
+          >
+            <div className={`absolute top-1 w-7 h-7 rounded-full bg-white shadow-lg transition-all duration-300 flex items-center justify-center ${
+              isDarkTheme ? 'left-8' : 'left-1'
+            }`}>
+              {isDarkTheme ? (
+                <Moon size={14} className="text-indigo-500" />
+              ) : (
+                <Sun size={14} className="text-yellow-500" />
+              )}
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Notification Sounds */}
-      <div className="bg-surface/40 backdrop-blur-lg border border-white/5 rounded-2xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6 mb-6`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
           <Volume2 size={20} className="text-accent" />
           Notification Sound
         </h2>
-        <p className="text-sm text-slate-400 mb-4">Choose your preferred alarm sound</p>
+        <p className={`text-sm mb-4 ${isDarkTheme ? 'text-slate-400' : 'text-gray-500'}`}>Choose your preferred alarm sound</p>
         
         <div className="space-y-3">
           {NOTIFICATION_SOUNDS.map((sound) => (
@@ -433,12 +551,14 @@ const App: React.FC = () => {
               className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
                 selectedSound === sound.id
                   ? 'bg-accent/10 border-accent/30 text-white'
-                  : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
+                  : isDarkTheme 
+                    ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
               }`}
             >
               <div className="text-left">
                 <p className="font-medium">{sound.name}</p>
-                <p className="text-sm text-slate-500">{sound.description}</p>
+                <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>{sound.description}</p>
               </div>
               {selectedSound === sound.id && (
                 <Check size={20} className="text-accent" />
@@ -449,8 +569,8 @@ const App: React.FC = () => {
       </div>
 
       {/* Data Management */}
-      <div className="bg-surface/40 backdrop-blur-lg border border-white/5 rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white border-gray-200'} backdrop-blur-lg border rounded-2xl p-6`}>
+        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
           <Trash2 size={20} className="text-red-400" />
           Data Management
         </h2>
@@ -461,11 +581,15 @@ const App: React.FC = () => {
               resetStats();
               alert('Today\'s stats have been reset!');
             }}
-            className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 hover:bg-white/10 transition-all"
+            className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+              isDarkTheme 
+                ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
+                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+            }`}
           >
             <div className="text-left">
               <p className="font-medium">Reset Today's Stats</p>
-              <p className="text-sm text-slate-500">Clear session count and focus time for today</p>
+              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>Clear session count and focus time for today</p>
             </div>
             <RotateCcw size={18} />
           </button>
@@ -477,11 +601,15 @@ const App: React.FC = () => {
                 alert('Session history cleared!');
               }
             }}
-            className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 hover:bg-red-500/10 hover:border-red-500/20 transition-all"
+            className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+              isDarkTheme 
+                ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-red-500/10 hover:border-red-500/20'
+                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200'
+            }`}
           >
             <div className="text-left">
               <p className="font-medium">Clear All History</p>
-              <p className="text-sm text-slate-500">Permanently delete all session records</p>
+              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>Permanently delete all session records</p>
             </div>
             <Trash2 size={18} className="text-red-400" />
           </button>
@@ -489,8 +617,8 @@ const App: React.FC = () => {
       </div>
 
       {/* App Info */}
-      <div className="mt-8 text-center text-slate-500 text-sm">
-        <p>Ihsan Productivity Timer v1.0</p>
+      <div className={`mt-8 text-center text-sm ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
+        <p>Ihsan Productivity Timer v1.1</p>
         <p className="mt-1">Built with ❤️ for deep work</p>
       </div>
     </div>
@@ -555,6 +683,7 @@ const App: React.FC = () => {
                      onUpdateDailyGoal={updateDailyGoal}
                      onClearHistory={clearHistory}
                      focusTask={focusTask}
+                     streak={streak}
                    />
                 </div>
 
