@@ -15,9 +15,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   return (
     <nav className="fixed bottom-0 left-0 w-full md:w-20 md:h-screen md:static bg-surface/50 backdrop-blur-md border-t md:border-t-0 md:border-r border-white/5 flex md:flex-col justify-between items-center py-4 md:py-8 z-50">
       <div className="flex md:flex-col gap-1 w-full justify-evenly md:justify-start items-center">
-        {/* Logo/Brand placeholder top */}
+        {/* Logo/Brand */}
         <div className="hidden md:flex w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl mb-12 items-center justify-center shadow-inner">
-           <div className="w-4 h-4 rounded-full bg-accent shadow-glow-sm"></div>
+           <span className="text-accent font-bold text-xl shadow-glow-sm">I</span>
         </div>
 
         {menuItems.map((item) => {

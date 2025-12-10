@@ -31,7 +31,9 @@ const Header: React.FC<HeaderProps> = ({ focusTask, setFocusTask }) => {
     <header className="w-full h-16 md:h-20 flex items-center justify-between px-6 md:px-10 border-b border-white/5 bg-transparent">
       {/* Left: Task Context */}
       <div className="flex items-center gap-3 flex-1">
-        <div className="w-2 h-2 rounded-full bg-accent shadow-[0_0_10px_#39FF14] animate-pulse flex-shrink-0"></div>
+        <div className="w-6 h-6 rounded-full bg-accent shadow-[0_0_10px_#39FF14] flex items-center justify-center flex-shrink-0">
+          <span className="text-black font-bold text-sm">I</span>
+        </div>
         <div className="flex flex-col flex-1 min-w-0">
             <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Current Focus</span>
             {isEditing ? (
