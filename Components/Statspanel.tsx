@@ -193,10 +193,25 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
               <BarChart data={(() => {
                 const days: { [key: string]: number } = {};
                 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                
+                // Get start of current week (Sunday)
+                const now = new Date();
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - now.getDay());
+                startOfWeek.setHours(0, 0, 0, 0);
+                
+                // Get end of current week (Saturday)
+                const endOfWeek = new Date(startOfWeek);
+                endOfWeek.setDate(startOfWeek.getDate() + 6);
+                endOfWeek.setHours(23, 59, 59, 999);
+                
+                // Filter sessions for current week only
                 sessionHistory.forEach(session => {
-                  const date = new Date(session.completedAt);
-                  const dayName = dayNames[date.getDay()];
-                  days[dayName] = (days[dayName] || 0) + session.duration;
+                  const sessionDate = new Date(session.completedAt);
+                  if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
+                    const dayName = dayNames[sessionDate.getDay()];
+                    days[dayName] = (days[dayName] || 0) + session.duration;
+                  }
                 });
                 return dayNames.map(day => ({ day, minutes: days[day] || 0 }));
               })()}>
