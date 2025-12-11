@@ -134,6 +134,12 @@ const App: React.FC = () => {
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   
+  // Background tab support
+  const [isTabVisible, setIsTabVisible] = useState(true);
+  const [hasNotificationPermission, setHasNotificationPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false
+  );
+  
   // Timer State
   const getInitialTime = (m: FocusMode, p: TimerPhase) => {
     if (m === FocusMode.CUSTOM) {
@@ -196,6 +202,39 @@ const App: React.FC = () => {
   useEffect(() => {
     safeSetItem(STORAGE_KEYS.lastActiveDate, lastActiveDate);
   }, [lastActiveDate]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      console.log('🔔 Requesting notification permission...');
+      Notification.requestPermission().then(permission => {
+        setHasNotificationPermission(permission === 'granted');
+        if (permission === 'granted') {
+          console.log('✅ Notification permission granted');
+        } else {
+          console.log('❌ Notification permission denied');
+        }
+      });
+    }
+  }, []);
+
+  // Page Visibility API - Track when user switches tabs/apps
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const visible = !document.hidden;
+      setIsTabVisible(visible);
+      console.log(visible ? '👀 Tab visible' : '🙈 Tab hidden');
+      
+      // If returning to tab while timer is running, sync with worker
+      if (visible && isRunning && timerWorkerRef.current) {
+        console.log('🔄 Syncing timer state after tab visibility change');
+        timerWorkerRef.current.postMessage({ type: 'getStatus' });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRunning]);
 
   // Check and update streak on app load and when completing a session
   const updateStreak = useCallback(() => {
@@ -269,10 +308,31 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAlarmPlaying]);
 
-  // Browser notification permission
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+  // Browser notification - Send notification when timer completes in background
+  const sendBrowserNotification = useCallback((title: string, body: string, urgent = false) => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      console.log('🔕 Notifications not available or not permitted');
+      return;
+    }
+
+    try {
+      const notification = new Notification(title, {
+        body,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        tag: 'timer-complete',
+        requireInteraction: urgent, // Keep notification visible for urgent alerts
+        silent: false,
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+
+      console.log('🔔 Browser notification sent:', title);
+    } catch (e) {
+      console.warn('❌ Failed to send browser notification:', e);
     }
   }, []);
 
@@ -820,6 +880,15 @@ const App: React.FC = () => {
         playAlarm();
         sendNotification('Focus Complete! 🎉', `Great job! Time for a break.`, 'focus-complete');
         
+        // Send browser notification if tab is hidden (background)
+        if (!isTabVisible) {
+          sendBrowserNotification(
+            '🎉 Focus Complete!',
+            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '20' : customFocusTime}-minute focus session. Time for a break!`,
+            true
+          );
+        }
+        
         const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 20 : customFocusTime;
         
         // Update stats
@@ -842,6 +911,16 @@ const App: React.FC = () => {
         // Break completed - STOP completely and play alarm
         playAlarm();
         sendNotification('Break Over! 💪', 'Ready for another focus session?', 'break-complete');
+        
+        // Send browser notification if tab is hidden (background)
+        if (!isTabVisible) {
+          sendBrowserNotification(
+            '💪 Break Over!',
+            'Your break is complete. Ready for another focus session?',
+            true
+          );
+        }
+        
         setIsRunning(false); // Stop after break, session complete
       }
       
@@ -851,7 +930,7 @@ const App: React.FC = () => {
     return () => {
       if (fallbackInterval) clearInterval(fallbackInterval);
     };
-  }, [isRunning, timeLeft, mode, phase, playAlarm, sendNotification, focusTask, customFocusTime, customBreakTime, addToHistory, requestWakeLock, releaseWakeLock]);
+  }, [isRunning, timeLeft, mode, phase, playAlarm, sendNotification, focusTask, customFocusTime, customBreakTime, addToHistory, requestWakeLock, releaseWakeLock, isTabVisible, sendBrowserNotification]);
 
   // Function to skip to next phase
   const skipPhase = () => {
@@ -983,6 +1062,35 @@ const App: React.FC = () => {
           Notification Sound
         </h2>
         <p className={`text-sm mb-4 ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>Choose your preferred alarm sound</p>
+        
+        {/* Background Notifications Info */}
+        <div className={`mb-4 p-3 rounded-lg ${
+          hasNotificationPermission 
+            ? isDarkTheme ? 'bg-green-500/10 border border-green-500/20' : 'bg-green-50/80 border border-green-200/60'
+            : isDarkTheme ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-yellow-50/80 border border-yellow-200/60'
+        }`}>
+          <div className="flex items-start gap-2">
+            {hasNotificationPermission ? (
+              <CheckCircle2 size={18} className="text-green-500 mt-0.5" />
+            ) : (
+              <AlertTriangle size={18} className="text-yellow-500 mt-0.5" />
+            )}
+            <div>
+              <p className={`text-sm font-medium ${
+                hasNotificationPermission 
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-yellow-600 dark:text-yellow-400'
+              }`}>
+                {hasNotificationPermission ? '✓ Background Notifications Enabled' : '⚠ Background Notifications Disabled'}
+              </p>
+              <p className={`text-xs mt-1 ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>
+                {hasNotificationPermission 
+                  ? 'Timer akan notify kau even bila multitask atau switch tab/app lain' 
+                  : 'Allow notifications untuk dapat alert bila timer habis walaupun tak buka tab'}
+              </p>
+            </div>
+          </div>
+        </div>
         
         <div className="space-y-3">
           {NOTIFICATION_SOUNDS.map((sound) => (
