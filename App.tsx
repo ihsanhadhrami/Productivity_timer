@@ -328,59 +328,78 @@ const App: React.FC = () => {
 
   // Unlock AudioContext for mobile browsers (must be called on user interaction)
   const unlockAudioContext = useCallback(() => {
+    console.log('🔓 Unlocking AudioContext...');
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
-        console.warn('AudioContext not supported on this device');
-        return;
+        console.warn('❌ AudioContext not supported on this device');
+        return false;
       }
       
       // Always create fresh context if none exists or if closed
       if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
         sharedAudioContextRef.current = new AudioContextClass();
-        console.log('Created new AudioContext');
+        console.log('✅ Created new AudioContext, state:', sharedAudioContextRef.current.state);
       }
       
       const ctx = sharedAudioContextRef.current;
       
-      // Resume if suspended (mobile browsers suspend by default)
+      // SAFARI FIX: Must resume AND play sound on same user gesture
       if (ctx.state === 'suspended') {
+        console.log('⏸️  AudioContext suspended, resuming...');
         ctx.resume().then(() => {
-          console.log('AudioContext resumed successfully, state:', ctx.state);
-          isAudioUnlockedRef.current = true;
+          console.log('▶️  AudioContext resumed, state:', ctx.state);
+          isAudioUnlockedRef.current = ctx.state === 'running';
+          
+          // Safari: Play silent buffer immediately after resume
+          try {
+            const buffer = ctx.createBuffer(1, 1, 22050);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start(0);
+            console.log('🔇 Silent buffer played for unlock');
+          } catch (bufferError) {
+            console.warn('⚠️  Silent buffer error (non-critical):', bufferError);
+          }
         }).catch(e => {
-          console.warn('Failed to resume AudioContext:', e);
+          console.warn('❌ Failed to resume AudioContext:', e);
+          isAudioUnlockedRef.current = false;
         });
       } else if (ctx.state === 'running') {
+        console.log('✅ AudioContext already running');
         isAudioUnlockedRef.current = true;
+        
+        // Play silent buffer even if running (Safari requirement)
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+          console.log('🔇 Silent buffer played for iOS');
+        } catch (bufferError) {
+          console.warn('⚠️  Silent buffer error:', bufferError);
+        }
       }
       
-      // Play silent buffer to fully unlock on iOS Safari
-      // This is critical for iOS - must happen on user gesture
-      try {
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-        source.stop(0.001);
-        console.log('Silent buffer played for iOS unlock');
-      } catch (bufferError) {
-        console.warn('Silent buffer error (non-critical):', bufferError);
-      }
+      return true;
       
     } catch (e) {
-      console.warn('Failed to unlock AudioContext:', e);
+      console.warn('❌ Failed to unlock AudioContext:', e);
+      return false;
     }
   }, []);
 
   // Sound generators for different notification sounds
-  const playSound = useCallback(async (soundType: NotificationSound, preview = false) => {
+  const playSound = useCallback(async (soundType: NotificationSound, preview = false): Promise<boolean> => {
+    console.log('🔊 playSound called:', soundType, 'preview:', preview);
+    
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
-        console.warn('AudioContext not supported');
-        return;
+        console.warn('❌ AudioContext not supported');
+        throw new Error('AudioContext not supported');
       }
       
       let audioContext: AudioContext;
@@ -388,44 +407,66 @@ const App: React.FC = () => {
       if (preview) {
         // For preview, always create new context
         audioContext = new AudioContextClass();
+        console.log('🎵 Created new AudioContext for preview');
       } else {
         // For alarm, use or create shared context
-        // IMPORTANT: Create new context if old one is closed (from stopAlarm)
+        // SAFARI FIX: NEVER close the context, always reuse
         if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
-          console.log('Creating new shared AudioContext for alarm');
+          console.log('🆕 Creating new shared AudioContext for alarm');
           sharedAudioContextRef.current = new AudioContextClass();
         }
         audioContext = sharedAudioContextRef.current;
         audioContextRef.current = audioContext;
       }
       
+      console.log('📍 AudioContext state before resume:', audioContext.state);
+      
       // CRITICAL: Wait for resume to complete before playing
-      // iOS Safari will not play audio if context is suspended
+      // Safari will NOT play audio if context is suspended
       if (audioContext.state === 'suspended') {
-        console.log('AudioContext suspended, attempting resume...');
+        console.log('⏸️  AudioContext suspended, attempting resume...');
         try {
           await audioContext.resume();
-          console.log('AudioContext resumed, state:', audioContext.state);
+          console.log('▶️  AudioContext resumed successfully, state:', audioContext.state);
+          
+          // Safari: Wait a tiny bit for resume to fully complete
+          await new Promise(resolve => setTimeout(resolve, 10));
+          
         } catch (resumeError) {
-          console.warn('Resume failed:', resumeError);
-          // Try creating a completely new context as fallback
+          console.warn('❌ Resume failed:', resumeError);
+          
+          // Safari fallback: Create completely new context
           if (!preview) {
-            console.log('Creating fallback AudioContext');
+            console.log('🔄 Creating fallback AudioContext');
             audioContext = new AudioContextClass();
             sharedAudioContextRef.current = audioContext;
             audioContextRef.current = audioContext;
+            
+            // Try resume again on new context
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+            }
+          } else {
+            throw resumeError;
           }
         }
       }
       
-      // Double-check context is running
+      // Final state check - MUST be running
       if (audioContext.state !== 'running') {
-        console.warn('AudioContext not running, state:', audioContext.state);
+        console.warn('⚠️  AudioContext not running after resume, state:', audioContext.state);
+        
         // Last resort: try resume one more time
-        await audioContext.resume();
+        try {
+          await audioContext.resume();
+          await new Promise(resolve => setTimeout(resolve, 10));
+        } catch (e) {
+          console.error('❌ Cannot get AudioContext to run');
+          throw new Error('AudioContext failed to run');
+        }
       }
       
-      console.log('Playing sound:', soundType, 'Context state:', audioContext.state);
+      console.log('✅ AudioContext ready, state:', audioContext.state);
     
     const playMelody = () => {
       let notes: { freq: number; duration: number; type?: OscillatorType }[] = [];
@@ -508,43 +549,72 @@ const App: React.FC = () => {
     };
     
     playMelody();
+    console.log('🎶 First melody played');
     
     if (!preview) {
-      // Repeat for alarm - check both refs and state
-      alarmIntervalRef.current = window.setInterval(() => {
-        // Check if shared context exists and is usable
-        const ctx = sharedAudioContextRef.current;
-        if (ctx && ctx.state === 'running') {
-          playMelody();
-        } else if (ctx && ctx.state === 'suspended') {
-          // Try to resume if suspended (can happen on iOS)
-          ctx.resume().then(() => {
-            if (ctx.state === 'running') {
-              playMelody();
+      // Repeat for alarm - Safari needs careful interval handling
+      alarmIntervalRef.current = window.setInterval(async () => {
+        try {
+          // Check if shared context exists and is usable
+          const ctx = sharedAudioContextRef.current;
+          
+          if (!ctx) {
+            console.warn('⚠️  No AudioContext in alarm interval');
+            return;
+          }
+          
+          // Safari: Check context state and resume if needed
+          if (ctx.state !== 'running') {
+            console.log('⏸️  Context not running during alarm (state:', ctx.state, '), resuming...');
+            try {
+              await ctx.resume();
+              console.log('▶️  Context resumed, state:', ctx.state);
+            } catch (resumeError) {
+              console.warn('❌ Failed to resume in alarm interval:', resumeError);
             }
-          }).catch(() => {});
+          }
+          
+          // Play melody if context is now running
+          if (ctx.state === 'running') {
+            playMelody();
+            console.log('🔁 Alarm repeat - melody played');
+          } else {
+            console.warn('⚠️  AudioContext still not running, state:', ctx.state);
+          }
+        } catch (intervalError) {
+          console.warn('❌ Error in alarm interval:', intervalError);
         }
       }, 1500);
       
       setIsAlarmPlaying(true);
-      console.log('Alarm started, will repeat every 1.5s');
+      console.log('⏰ Alarm started, will repeat every 1.5s');
+      return true;
     } else {
       // For preview, close after playing once
       setTimeout(() => {
         try {
           audioContext.close();
+          console.log('🔇 Preview AudioContext closed');
         } catch (e) {
-          // Ignore close errors
+          console.warn('⚠️  Error closing preview context:', e);
         }
       }, 2000);
+      return true;
     }
     } catch (e) {
-      console.warn('Failed to play sound:', e);
+      console.error('❌ Failed to play sound:', e);
+      
       // Fallback: Try vibration on mobile devices
       if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200, 100, 200]);
-        console.log('Using vibration fallback');
+        try {
+          navigator.vibrate([200, 100, 200, 100, 200]);
+          console.log('📳 Using vibration fallback');
+        } catch (vibError) {
+          console.warn('❌ Vibration also failed:', vibError);
+        }
       }
+      
+      return false;
     }
   }, []);
 
@@ -624,33 +694,56 @@ const App: React.FC = () => {
 
   // Initialize Web Worker for background timer
   useEffect(() => {
-    // Create worker
+    console.log('🏭 Initializing Web Worker...');
+    
+    // Create worker with error handling
     try {
       timerWorkerRef.current = new Worker('/timer-worker.js');
-      console.log('Timer Web Worker initialized');
+      console.log('✅ Timer Web Worker initialized');
       
       // Handle messages from worker
       timerWorkerRef.current.onmessage = (e) => {
-        const { type, timeLeft: workerTimeLeft } = e.data;
-        
-        if (type === 'TICK') {
-          setTimeLeft(workerTimeLeft);
-        } else if (type === 'COMPLETE') {
-          // Timer completed - this will be handled by the useEffect below
-          setTimeLeft(0);
+        try {
+          if (!e || !e.data) {
+            console.warn('⚠️  Invalid message from worker');
+            return;
+          }
+          
+          const { type, timeLeft: workerTimeLeft, error } = e.data;
+          
+          if (type === 'TICK') {
+            setTimeLeft(workerTimeLeft);
+          } else if (type === 'COMPLETE') {
+            console.log('✅ Timer completed (from worker)');
+            setTimeLeft(0);
+          } else if (type === 'ERROR') {
+            console.error('❌ Worker error:', error);
+          } else {
+            console.warn('⚠️  Unknown message type from worker:', type);
+          }
+        } catch (msgError) {
+          console.error('❌ Error handling worker message:', msgError);
         }
       };
       
       timerWorkerRef.current.onerror = (error) => {
-        console.warn('Timer Worker error:', error);
+        console.error('❌ Timer Worker error:', error);
       };
+      
     } catch (e) {
-      console.warn('Web Worker not supported, using fallback timer');
+      console.warn('⚠️  Web Worker not supported or failed to load, using fallback timer:', e);
+      // Set to null to trigger fallback
+      timerWorkerRef.current = null;
     }
     
     return () => {
       if (timerWorkerRef.current) {
-        timerWorkerRef.current.terminate();
+        console.log('🧹 Terminating Web Worker');
+        try {
+          timerWorkerRef.current.terminate();
+        } catch (e) {
+          console.warn('⚠️  Error terminating worker:', e);
+        }
         timerWorkerRef.current = null;
       }
     };
