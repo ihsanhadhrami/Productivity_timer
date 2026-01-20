@@ -52,7 +52,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
   // Timer configurations
   const TIMER_CONFIG = {
     [FocusMode.S1]: { focus: 30 * 60, break: 5 * 60 },
-    [FocusMode.S2]: { focus: 20 * 60, break: 4 * 60 },
+    [FocusMode.S2]: { focus: 40 * 60, break: 6 * 60 },
     [FocusMode.CUSTOM]: { focus: customFocusTime * 60, break: customBreakTime * 60 },
   };
 
@@ -71,7 +71,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
   // Get time label for current mode
   const getTimeLabel = () => {
     if (mode === FocusMode.S1) return isBreak ? '5 min' : '30 min';
-    if (mode === FocusMode.S2) return isBreak ? '4 min' : '20 min';
+    if (mode === FocusMode.S2) return isBreak ? '6 min' : '40 min';
     return isBreak ? `${customBreakTime} min` : `${customFocusTime} min`;
   };
 
@@ -269,7 +269,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
           `}
         >
           <span>S2</span>
-          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S2 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>20/4</span>
+          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S2 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>40/6</span>
         </button>
 
         <button

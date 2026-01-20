@@ -884,12 +884,12 @@ const App: React.FC = () => {
         if (!isTabVisible) {
           sendBrowserNotification(
             '🎉 Focus Complete!',
-            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '20' : customFocusTime}-minute focus session. Time for a break!`,
+            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '40' : customFocusTime}-minute focus session. Time for a break!`,
             true
           );
         }
         
-        const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 20 : customFocusTime;
+        const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 40 : customFocusTime;
         
         // Update stats
         setStats(prev => ({

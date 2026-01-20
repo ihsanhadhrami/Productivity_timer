@@ -1,6 +1,6 @@
 export enum FocusMode {
   S1 = 'S1', // 30/5
-  S2 = 'S2', // 20/4
+  S2 = 'S2', // 40/6
   CUSTOM = 'CUSTOM', // User defined
 }
 
