@@ -18,7 +18,7 @@ interface ToastNotification {
 // Timer configurations
 const TIMER_CONFIG = {
   [FocusMode.S1]: { focus: 30 * 60, break: 5 * 60 },  // 30 min focus, 5 min break
-  [FocusMode.S2]: { focus: 20 * 60, break: 4 * 60 },  // 20 min focus, 4 min break
+  [FocusMode.S2]: { focus: 40 * 60, break: 6 * 60 },  // 40 min focus, 6 min break
   custom: { focus: 25 * 60, break: 5 * 60 },  // Custom default
 };
 
