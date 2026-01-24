@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Focus Timer by Ihsan</title>
     
     <!-- Meta Description -->
@@ -12,7 +12,17 @@
     
     <!-- Favicon - SVG for modern browsers -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    
+    <!-- PWA: Apple Touch Icon for iOS -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+    
+    <!-- PWA: iOS-specific meta tags for standalone mode -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Focus Timer" />
+    
+    <!-- PWA: Mobile web app capable -->
+    <meta name="mobile-web-app-capable" content="yes" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />

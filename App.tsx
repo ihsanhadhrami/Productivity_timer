@@ -3,6 +3,7 @@ import Sidebar from './Components/sidebar';
 import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
+import InstallPrompt from './Components/InstallPrompt';
 import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound } from './types';
 import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
@@ -1257,6 +1258,9 @@ const App: React.FC = () => {
       </main>
       
       {/* Toast Notifications */}
+      {/* PWA Install Prompt - positioned at bottom left, non-intrusive */}
+      <InstallPrompt />
+
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
         {toasts.map((toast, index) => (
           <div

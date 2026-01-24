@@ -16,6 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["*.tsx", "Components/**/*.tsx"],
+  "include": ["*.tsx", "pwa-types.ts", "vite-env.d.ts", "Components/**/*.tsx"],
+  "exclude": ["vite.config.ts", "vitest.config.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
