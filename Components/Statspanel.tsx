@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check, Flame } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check, Flame, ListTodo } from 'lucide-react';
 import { SessionStats, SessionHistory } from '../types';
 import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis } from 'recharts';
 
@@ -42,6 +42,39 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
     const date = new Date(isoString);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
+
+  // Group today's sessions by activity/task
+  const activitySummary = useMemo(() => {
+    const activityMap = new Map<string, { minutes: number; sessions: number; lastTime: string }>();
+    
+    todaySessions.forEach(session => {
+      const task = session.task || 'Unnamed Task';
+      const existing = activityMap.get(task) || { minutes: 0, sessions: 0, lastTime: '' };
+      activityMap.set(task, {
+        minutes: existing.minutes + session.duration,
+        sessions: existing.sessions + 1,
+        lastTime: session.completedAt
+      });
+    });
+    
+    // Convert to array and sort by minutes (descending)
+    return Array.from(activityMap.entries())
+      .map(([task, data]) => ({ task, ...data }))
+      .sort((a, b) => b.minutes - a.minutes);
+  }, [todaySessions]);
+
+  // Calculate total minutes for percentage calculation
+  const totalActivityMinutes = activitySummary.reduce((sum, a) => sum + a.minutes, 0);
+
+  // Activity colors for visual distinction
+  const activityColors = [
+    'from-accent to-green-400',
+    'from-blue-500 to-cyan-400',
+    'from-purple-500 to-pink-400',
+    'from-orange-500 to-yellow-400',
+    'from-red-500 to-rose-400',
+    'from-teal-500 to-emerald-400',
+  ];
 
   return (
     <div className="w-full lg:w-96 flex flex-col gap-6 animate-in fade-in slide-in-from-right duration-700">
@@ -112,6 +145,85 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
           <RotateCcw size={16} /> Reset Today's Stats
         </button>
       </div>
+
+      {/* Today's Activities Results Bar */}
+      {activitySummary.length > 0 && (
+        <div className={`backdrop-blur-xl border rounded-3xl p-6 ${
+          isDarkTheme 
+            ? 'bg-surface/60 border-white/5' 
+            : 'bg-white/70 border-stone-200/60 shadow-sm'
+        }`}>
+          <div className="flex items-center gap-2 mb-4">
+            <ListTodo size={18} className="text-accent" />
+            <h3 className={`text-xs font-bold uppercase tracking-widest ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
+              Today's Activities
+            </h3>
+          </div>
+          
+          {/* Stacked Results Bar */}
+          <div className={`w-full h-4 rounded-full mb-4 overflow-hidden flex ${isDarkTheme ? 'bg-slate-800' : 'bg-stone-200'}`}>
+            {activitySummary.map((activity, index) => {
+              const percentage = totalActivityMinutes > 0 ? (activity.minutes / totalActivityMinutes) * 100 : 0;
+              return (
+                <div
+                  key={activity.task}
+                  className={`h-full bg-gradient-to-r ${activityColors[index % activityColors.length]} transition-all duration-500`}
+                  style={{ width: `${percentage}%` }}
+                  title={`${activity.task}: ${activity.minutes} min`}
+                />
+              );
+            })}
+          </div>
+
+          {/* Activity List */}
+          <div className="space-y-3">
+            {activitySummary.map((activity, index) => (
+              <div 
+                key={activity.task}
+                className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                  isDarkTheme 
+                    ? 'bg-white/5 border-white/5 hover:border-white/10' 
+                    : 'bg-stone-50/80 border-stone-200/60 hover:border-stone-300/60'
+                }`}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div 
+                    className={`w-3 h-3 rounded-full bg-gradient-to-r ${activityColors[index % activityColors.length]} flex-shrink-0`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-medium truncate ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+                      {activity.task}
+                    </p>
+                    <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
+                      {activity.sessions} session{activity.sessions > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <p className={`text-sm font-mono font-bold ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+                    {activity.minutes}<span className={`text-xs ml-0.5 ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>m</span>
+                  </p>
+                  <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
+                    {formatSessionTime(activity.lastTime)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Total Summary */}
+          <div className={`mt-4 pt-4 border-t ${isDarkTheme ? 'border-white/10' : 'border-stone-200/60'}`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-medium ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>
+                Total across {activitySummary.length} activit{activitySummary.length > 1 ? 'ies' : 'y'}
+              </span>
+              <span className={`text-sm font-mono font-bold ${isDarkTheme ? 'text-accent' : 'text-accent'}`}>
+                {totalActivityMinutes} min
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Daily Stats */}
       <div className={`backdrop-blur-lg border rounded-3xl p-6 flex-1 ${
