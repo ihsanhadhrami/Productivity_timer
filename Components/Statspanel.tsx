@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check, Flame, ListTodo } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Zap, Clock, Target, History, RotateCcw, ChevronDown, ChevronUp, Edit2, Check, Flame, ListTodo, X } from 'lucide-react';
 import { SessionStats, SessionHistory } from '../types';
 import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis } from 'recharts';
 
@@ -29,6 +29,7 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
   const [tempGoal, setTempGoal] = useState(stats.dailyGoal);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   
   const totalSessions = stats.s1Count + stats.s2Count + (stats.customCount || 0);
   const progressPercentage = Math.min((totalSessions / stats.dailyGoal) * 100, 100);
@@ -75,6 +76,65 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
     'from-red-500 to-rose-400',
     'from-teal-500 to-emerald-400',
   ];
+
+  // Solid hex colors matching the gradient palette (for Recharts bars)
+  const solidColors = [
+    '#39FF14', // green/accent
+    '#3B82F6', // blue
+    '#A855F7', // purple
+    '#F97316', // orange
+    '#EF4444', // red
+    '#14B8A6', // teal
+    '#EC4899', // pink
+    '#FACC15', // yellow
+  ];
+
+  // Weekly stacked chart data
+  const { weeklyData, weekTasks, weekSessionsByDay } = useMemo(() => {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const taskSet = new Set<string>();
+    const dayTaskMap: Record<string, Record<string, number>> = {};
+    const daySessionsMap: Record<string, SessionHistory[]> = {};
+    dayNames.forEach(d => { dayTaskMap[d] = {}; daySessionsMap[d] = []; });
+
+    sessionHistory.forEach(session => {
+      const sessionDate = new Date(session.completedAt);
+      if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
+        const dayName = dayNames[sessionDate.getDay()];
+        const task = session.task || 'Unnamed Task';
+        taskSet.add(task);
+        dayTaskMap[dayName][task] = (dayTaskMap[dayName][task] || 0) + session.duration;
+        daySessionsMap[dayName].push(session);
+      }
+    });
+
+    const tasks = Array.from(taskSet);
+    const data = dayNames.map(day => {
+      const entry: Record<string, any> = { day };
+      tasks.forEach(t => { entry[t] = dayTaskMap[day][t] || 0; });
+      return entry;
+    });
+
+    return { weeklyData: data, weekTasks: tasks, weekSessionsByDay: daySessionsMap };
+  }, [sessionHistory]);
+
+  // Details for selected day
+  const selectedDaySessions = useMemo(() => {
+    if (!selectedDay) return [];
+    return weekSessionsByDay[selectedDay] || [];
+  }, [selectedDay, weekSessionsByDay]);
+
+  const handleBarClick = useCallback((dayName: string) => {
+    setSelectedDay(prev => prev === dayName ? null : dayName);
+  }, []);
 
   return (
     <div className="w-full lg:w-96 flex flex-col gap-6 animate-in fade-in slide-in-from-right duration-700">
@@ -299,43 +359,111 @@ const StatsPanel: React.FC<StatsPanelProps> = ({
          </div>
 
          {/* Weekly Chart */}
-         <div className="h-24 w-full mb-4">
+         <div className="w-full mb-4">
             <p className={`text-xs mb-2 ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>This Week</p>
+            <div className="h-24 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={(() => {
-                const days: { [key: string]: number } = {};
-                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                
-                // Get start of current week (Sunday)
-                const now = new Date();
-                const startOfWeek = new Date(now);
-                startOfWeek.setDate(now.getDate() - now.getDay());
-                startOfWeek.setHours(0, 0, 0, 0);
-                
-                // Get end of current week (Saturday)
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 6);
-                endOfWeek.setHours(23, 59, 59, 999);
-                
-                // Filter sessions for current week only
-                sessionHistory.forEach(session => {
-                  const sessionDate = new Date(session.completedAt);
-                  if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
-                    const dayName = dayNames[sessionDate.getDay()];
-                    days[dayName] = (days[dayName] || 0) + session.duration;
-                  }
-                });
-                return dayNames.map(day => ({ day, minutes: days[day] || 0 }));
-              })()}>
+              <BarChart data={weeklyData} onClick={(state: any) => {
+                if (state && state.activeLabel) handleBarClick(state.activeLabel);
+              }} style={{ cursor: 'pointer' }}>
                 <XAxis dataKey="day" tick={{ fill: isDarkTheme ? '#64748b' : '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: isDarkTheme ? '#0B101E' : '#fafaf9', borderColor: isDarkTheme ? '#334155' : '#d6d3d1', borderRadius: '8px' }}
                   itemStyle={{ color: isDarkTheme ? '#fff' : '#292524' }}
-                  formatter={(value: number) => [`${value}m`, 'Focus']}
+                  formatter={(value: number, name: string) => [`${value}m`, name]}
                 />
-                <Bar dataKey="minutes" fill="#39FF14" radius={[4, 4, 0, 0]} />
+                {weekTasks.length === 0 ? (
+                  <Bar dataKey="minutes" fill="#39FF14" radius={[4, 4, 0, 0]} />
+                ) : (
+                  weekTasks.map((task, idx) => (
+                    <Bar
+                      key={task}
+                      dataKey={task}
+                      stackId="week"
+                      fill={solidColors[idx % solidColors.length]}
+                      radius={idx === weekTasks.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))
+                )}
               </BarChart>
             </ResponsiveContainer>
+            </div>
+
+            {/* Task color legend */}
+            {weekTasks.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {weekTasks.map((task, idx) => (
+                  <div key={task} className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: solidColors[idx % solidColors.length] }} />
+                    <span className={`text-[10px] truncate max-w-[80px] ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>{task}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Tap hint */}
+            <p className={`text-[10px] mt-1 ${isDarkTheme ? 'text-slate-600' : 'text-stone-400'}`}>
+              Tap a day to view details
+            </p>
+
+            {/* Selected day detail panel */}
+            {selectedDay && (
+              <div className={`mt-3 p-4 rounded-2xl border animate-in fade-in slide-in-from-top-2 duration-300 ${
+                isDarkTheme
+                  ? 'bg-white/5 border-white/10'
+                  : 'bg-stone-50/80 border-stone-200/60'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className={`text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+                    {selectedDay}'s Sessions
+                  </h4>
+                  <button onClick={() => setSelectedDay(null)} className={`p-1 rounded-lg transition-colors ${isDarkTheme ? 'hover:bg-white/10' : 'hover:bg-stone-200'}`}>
+                    <X size={14} className={isDarkTheme ? 'text-slate-400' : 'text-stone-500'} />
+                  </button>
+                </div>
+                {selectedDaySessions.length === 0 ? (
+                  <p className={`text-xs text-center py-2 ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>No sessions on this day</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {selectedDaySessions.map((session) => {
+                      const taskIdx = weekTasks.indexOf(session.task || 'Unnamed Task');
+                      const color = solidColors[(taskIdx >= 0 ? taskIdx : 0) % solidColors.length];
+                      return (
+                        <div
+                          key={session.id}
+                          className={`flex items-center gap-3 p-2.5 rounded-xl border ${
+                            isDarkTheme
+                              ? 'bg-white/5 border-white/5'
+                              : 'bg-white/80 border-stone-200/60'
+                          }`}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-medium truncate ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+                              {session.task || 'Unnamed Task'}
+                            </p>
+                            <p className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
+                              {session.type} • {formatSessionTime(session.completedAt)}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-mono font-bold flex-shrink-0 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+                            {session.duration}<span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>m</span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className={`flex justify-between pt-2 border-t ${isDarkTheme ? 'border-white/10' : 'border-stone-200/60'}`}>
+                      <span className={`text-[10px] ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
+                        {selectedDaySessions.length} session{selectedDaySessions.length > 1 ? 's' : ''}
+                      </span>
+                      <span className={`text-xs font-mono font-bold ${isDarkTheme ? 'text-accent' : 'text-accent'}`}>
+                        {selectedDaySessions.reduce((s, ss) => s + ss.duration, 0)}m total
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
          </div>
 
          {/* Session History Toggle */}
