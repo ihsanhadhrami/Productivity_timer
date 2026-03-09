@@ -127,6 +127,8 @@ const App: React.FC = () => {
   const alarmIntervalRef = useRef<number | null>(null);
   const sharedAudioContextRef = useRef<AudioContext | null>(null); // Persistent context for mobile
   const isAudioUnlockedRef = useRef<boolean>(false); // Track if audio has been unlocked
+  const vibrationIntervalRef = useRef<number | null>(null); // Persistent vibration during alarm
+  const hapticNodeRef = useRef<OscillatorNode | null>(null); // iOS haptic oscillator
   
   // Web Worker and Wake Lock refs for background timer
   const timerWorkerRef = useRef<Worker | null>(null);
@@ -679,6 +681,83 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Start persistent vibration pattern that repeats with the alarm
+  const startVibration = useCallback(() => {
+    // Clear any existing vibration interval
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+
+    // Android/Windows: Use Vibration API with repeating pattern
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate([300, 100, 300, 100, 300]);
+        // Repeat vibration every 1.5s to sync with alarm sound
+        vibrationIntervalRef.current = window.setInterval(() => {
+          try {
+            navigator.vibrate([300, 100, 300, 100, 300]);
+          } catch (_) {}
+        }, 1500);
+        console.log('📳 Vibration started (Vibration API)');
+      } catch (_) {}
+    }
+
+    // iOS/Safari: Vibration API is NOT supported.
+    // Use a sub-bass oscillator (1Hz) routed to speaker at low gain.
+    // On Apple devices this causes physical haptic feedback via the Taptic Engine
+    // even when the ringer switch is muted, because AudioContext output
+    // bypasses the mute switch when the session is already active.
+    try {
+      const ctx = sharedAudioContextRef.current;
+      if (ctx && ctx.state === 'running') {
+        // Stop any previous haptic node
+        if (hapticNodeRef.current) {
+          try { hapticNodeRef.current.stop(); } catch (_) {}
+          hapticNodeRef.current = null;
+        }
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1, ctx.currentTime); // Sub-bass 1 Hz
+        gain.gain.setValueAtTime(0.15, ctx.currentTime); // Low volume
+        // Pulsing pattern: ramp up and down
+        const now = ctx.currentTime;
+        for (let i = 0; i < 20; i++) {
+          const t = now + i * 1.5;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.15, t + 0.3);
+          gain.gain.setValueAtTime(0.15, t + 0.6);
+          gain.gain.linearRampToValueAtTime(0, t + 0.9);
+        }
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 30); // Auto-stop after 30s safety limit
+        hapticNodeRef.current = osc;
+        console.log('📳 iOS haptic oscillator started');
+      }
+    } catch (e) {
+      console.warn('⚠️ iOS haptic simulation failed:', e);
+    }
+  }, []);
+
+  // Stop all vibration
+  const stopVibration = useCallback(() => {
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+    if ('vibrate' in navigator) {
+      try { navigator.vibrate(0); } catch (_) {}
+    }
+    if (hapticNodeRef.current) {
+      try { hapticNodeRef.current.stop(); } catch (_) {}
+      hapticNodeRef.current = null;
+    }
+    console.log('📳 Vibration stopped');
+  }, []);
+
   // Play alarm with selected sound
   const playAlarm = useCallback(async () => {
     console.log('playAlarm called, selected sound:', selectedSound);
@@ -686,11 +765,9 @@ const App: React.FC = () => {
     // Try to play sound
     await playSound(selectedSound);
     
-    // Also trigger vibration on mobile for extra notification
-    if ('vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200]);
-    }
-  }, [playSound, selectedSound]);
+    // Start persistent vibration (Android + iOS haptic)
+    startVibration();
+  }, [playSound, selectedSound, startVibration]);
   
   // Re-unlock audio context periodically while timer is running (iOS fix)
   useEffect(() => {
@@ -731,11 +808,14 @@ const App: React.FC = () => {
       // Note: We intentionally don't close sharedAudioContextRef
       // because closing it would require user interaction to unlock again
       
+      // Stop all vibration and haptic feedback
+      stopVibration();
+      
     } catch (e) {
       console.warn('Error stopping alarm:', e);
     }
     setIsAlarmPlaying(false);
-  }, []);
+  }, [stopVibration]);
 
   // Add session to history
   const addToHistory = useCallback((sessionType: string, duration: number) => {
