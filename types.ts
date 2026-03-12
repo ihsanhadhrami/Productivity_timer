@@ -33,3 +33,20 @@ export interface SessionHistory {
 }
 
 export type NotificationSound = 'crystals' | 'chime' | 'pulse' | 'bell' | 'synth';
+
+// Chunking / Task Breakdown Types
+export interface ChunkItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface ChunkProject {
+  id: string;
+  name: string;
+  chunks: ChunkItem[];
+  createdAt: string;
+  date: string; // date key for daily tracking
+}

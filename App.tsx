@@ -4,7 +4,8 @@ import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
 import InstallPrompt from './Components/InstallPrompt';
-import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound } from './types';
+import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound, ChunkProject } from './types';
+import ChunkingPanel from './Components/ChunkingPanel';
 import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 // Toast Notification Types
@@ -34,6 +35,7 @@ const STORAGE_KEYS = {
   notificationSound: 'ihsan_notification_sound',
   streak: 'ihsan_streak',
   lastActiveDate: 'ihsan_last_active_date',
+  chunkProjects: 'ihsan_chunk_projects',
 };
 
 // Notification Sound Options
@@ -99,6 +101,12 @@ const App: React.FC = () => {
     return safeGetItem(STORAGE_KEYS.lastActiveDate) || '';
   });
   
+  // Chunking projects state
+  const [chunkProjects, setChunkProjects] = useState<ChunkProject[]>(() => {
+    const saved = safeGetItem(STORAGE_KEYS.chunkProjects);
+    return safeParseJSON<ChunkProject[]>(saved, []);
+  });
+
   // Custom timer settings
   const [customFocusTime, setCustomFocusTime] = useState(25);
   const [customBreakTime, setCustomBreakTime] = useState(5);
@@ -195,6 +203,11 @@ const App: React.FC = () => {
   useEffect(() => {
     safeSetItem(STORAGE_KEYS.theme, isDarkTheme ? 'dark' : 'light');
   }, [isDarkTheme]);
+
+  // Save chunk projects to localStorage
+  useEffect(() => {
+    safeSetItem(STORAGE_KEYS.chunkProjects, JSON.stringify(chunkProjects));
+  }, [chunkProjects]);
 
   // Save streak to localStorage
   useEffect(() => {
@@ -1277,6 +1290,15 @@ const App: React.FC = () => {
           /* Settings Page */
           <div className="flex-1 overflow-y-auto">
             <SettingsPage />
+          </div>
+        ) : activeTab === 'chunking' ? (
+          /* Chunking Page */
+          <div className="flex-1 overflow-y-auto">
+            <ChunkingPanel
+              projects={chunkProjects}
+              onProjectsChange={setChunkProjects}
+              isDarkTheme={isDarkTheme}
+            />
           </div>
         ) : (
           /* Dashboard / Timer Page */

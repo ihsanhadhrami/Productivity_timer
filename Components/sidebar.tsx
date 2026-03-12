@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, Settings } from 'lucide-react';
+import { LayoutGrid, Settings, ListChecks } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -10,6 +10,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isDarkTheme = true }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutGrid, label: 'Timer' },
+    { id: 'chunking', icon: ListChecks, label: 'Chunking' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
 
