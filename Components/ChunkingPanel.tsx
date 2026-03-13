@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, CheckCircle2, Circle, ListChecks, ChevronDown, Pencil, X, Check } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle, ListChecks, ChevronDown, Pencil, X, Check, Clock } from 'lucide-react';
 import { ChunkProject, ChunkItem } from '../types';
 
 interface ChunkingPanelProps {
@@ -9,6 +9,13 @@ interface ChunkingPanelProps {
 }
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+const formatDateTime = (isoString: string) => {
+  const d = new Date(isoString);
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
+};
 
 const ChunkingPanel: React.FC<ChunkingPanelProps> = ({ projects, onProjectsChange, isDarkTheme }) => {
   const [newProjectName, setNewProjectName] = useState('');
@@ -272,23 +279,29 @@ const ChunkingPanel: React.FC<ChunkingPanelProps> = ({ projects, onProjectsChang
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <h3 className={`text-base font-semibold truncate ${
-                          allDone
-                            ? isDarkTheme ? 'text-emerald-400 line-through' : 'text-emerald-600 line-through'
-                            : isDarkTheme ? 'text-white' : 'text-stone-800'
-                        }`}>
-                          {project.name}
-                        </h3>
-                        <button
-                          onClick={e => { e.stopPropagation(); startEditProject(project); }}
-                          className={`opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity ${isDarkTheme ? 'text-slate-500 hover:text-slate-300' : 'text-stone-400 hover:text-stone-600'}`}
-                          style={{ opacity: undefined }}
-                          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                          onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
-                        >
-                          <Pencil size={14} />
-                        </button>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`text-base font-semibold truncate ${
+                            allDone
+                              ? isDarkTheme ? 'text-emerald-400 line-through' : 'text-emerald-600 line-through'
+                              : isDarkTheme ? 'text-white' : 'text-stone-800'
+                          }`}>
+                            {project.name}
+                          </h3>
+                          <button
+                            onClick={e => { e.stopPropagation(); startEditProject(project); }}
+                            className={`opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity ${isDarkTheme ? 'text-slate-500 hover:text-slate-300' : 'text-stone-400 hover:text-stone-600'}`}
+                            style={{ opacity: undefined }}
+                            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                            onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                        <span className={`flex items-center gap-1 text-[11px] mt-0.5 ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
+                          <Clock size={11} />
+                          {formatDateTime(project.createdAt)}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -381,15 +394,26 @@ const ChunkingPanel: React.FC<ChunkingPanelProps> = ({ projects, onProjectsChang
                               </button>
                             </div>
                           ) : (
-                            <span
-                              className={`flex-1 text-sm transition-all ${
-                                chunk.completed
-                                  ? isDarkTheme ? 'line-through text-slate-500' : 'line-through text-stone-400'
-                                  : isDarkTheme ? 'text-slate-200' : 'text-stone-700'
-                              }`}
-                            >
-                              {chunk.text}
-                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span
+                                className={`text-sm transition-all ${
+                                  chunk.completed
+                                    ? isDarkTheme ? 'line-through text-slate-500' : 'line-through text-stone-400'
+                                    : isDarkTheme ? 'text-slate-200' : 'text-stone-700'
+                                }`}
+                              >
+                                {chunk.text}
+                              </span>
+                              <div className={`flex items-center gap-1 text-[10px] mt-0.5 ${isDarkTheme ? 'text-slate-600' : 'text-stone-400'}`}>
+                                <Clock size={10} />
+                                {formatDateTime(chunk.createdAt)}
+                                {chunk.completed && chunk.completedAt && (
+                                  <span className={isDarkTheme ? 'text-emerald-600' : 'text-emerald-500'}>
+                                    {' · Done ' + formatDateTime(chunk.completedAt)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           )}
 
                           {/* Actions (visible on hover) */}
