@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://productivity-timer-app.netlify.app/sitemap.xml
