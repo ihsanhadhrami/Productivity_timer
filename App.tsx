@@ -20,7 +20,7 @@ interface ToastNotification {
 // Timer configurations
 const TIMER_CONFIG = {
   [FocusMode.S1]: { focus: 30 * 60, break: 5 * 60 },  // 30 min focus, 5 min break
-  [FocusMode.S2]: { focus: 40 * 60, break: 6 * 60 },  // 40 min focus, 6 min break
+  [FocusMode.S2]: { focus: 60 * 60, break: 10 * 60 },  // 60 min focus, 10 min break
   custom: { focus: 25 * 60, break: 5 * 60 },  // Custom default
 };
 
@@ -978,12 +978,12 @@ const App: React.FC = () => {
         if (!isTabVisible) {
           sendBrowserNotification(
             '🎉 Focus Complete!',
-            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '40' : customFocusTime}-minute focus session. Time for a break!`,
+            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '60' : customFocusTime}-minute focus session. Time for a break!`,
             true
           );
         }
         
-        const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 40 : customFocusTime;
+        const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 60 : customFocusTime;
         
         // Update stats
         setStats(prev => ({
