@@ -1,6 +1,6 @@
 export enum FocusMode {
   S1 = 'S1', // 30/5
-  S2 = 'S2', // 40/6
+  S2 = 'S2', // 60/10
 }
 
 export interface TimerConfig {

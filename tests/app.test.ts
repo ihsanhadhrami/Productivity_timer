@@ -80,9 +80,9 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
       expect(S1_FOCUS_TIME).toBe(1800);
     });
 
-    it('should initialize with correct default time for S2 mode (20 minutes)', () => {
-      const S2_FOCUS_TIME = 20 * 60; // 1200 seconds
-      expect(S2_FOCUS_TIME).toBe(1200);
+    it('should initialize with correct default time for S2 mode (60 minutes)', () => {
+      const S2_FOCUS_TIME = 60 * 60; // 3600 seconds
+      expect(S2_FOCUS_TIME).toBe(3600);
     });
 
     it('should correctly format time display', () => {
@@ -128,7 +128,7 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
     
     const TIMER_CONFIG = {
       S1: { focus: 30 * 60, break: 5 * 60 },
-      S2: { focus: 20 * 60, break: 4 * 60 },
+      S2: { focus: 60 * 60, break: 10 * 60 },
       CUSTOM: { focus: 25 * 60, break: 5 * 60 },
     };
 
@@ -138,8 +138,8 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
     });
 
     it('should have correct S2 configuration', () => {
-      expect(TIMER_CONFIG.S2.focus).toBe(1200);
-      expect(TIMER_CONFIG.S2.break).toBe(240);
+      expect(TIMER_CONFIG.S2.focus).toBe(3600);
+      expect(TIMER_CONFIG.S2.break).toBe(600);
     });
 
     it('should switch from focus to break phase correctly', () => {
@@ -166,7 +166,7 @@ describe('Ihsan Productivity Timer - Full Test Suite', () => {
       
       changeMode('S2');
       expect(mode).toBe('S2');
-      expect(timeLeft).toBe(1200);
+      expect(timeLeft).toBe(3600);
     });
   });
 
