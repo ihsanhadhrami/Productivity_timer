@@ -1089,7 +1089,7 @@ const App: React.FC = () => {
 
   // Settings Page Component
   const SettingsPage = () => (
-    <div className={`max-w-2xl mx-auto p-6 md:p-10 ${isDarkTheme ? '' : 'text-stone-800'}`}>
+    <div className={`max-w-2xl mx-auto p-4 md:p-10 ${isDarkTheme ? '' : 'text-stone-800'}`}>
       <h1 className={`text-3xl font-bold mb-8 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>Settings</h1>
       
       {/* Streak Display */}
@@ -1271,13 +1271,13 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className={`min-h-screen ${isDarkTheme ? 'bg-gradient-to-br from-[#020617] via-[#050608] to-[#0a0f1c]' : 'bg-gradient-to-br from-stone-100 via-amber-50/30 to-stone-50'} text-white flex flex-col md:flex-row font-sans selection:bg-accent selection:text-black overflow-hidden`}>
+    <div className={`h-[100dvh] ${isDarkTheme ? 'bg-gradient-to-br from-[#020617] via-[#050608] to-[#0a0f1c]' : 'bg-gradient-to-br from-stone-100 via-amber-50/30 to-stone-50'} text-white flex flex-col md:flex-row font-sans selection:bg-accent selection:text-black overflow-hidden`}>
       
       {/* Navigation */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDarkTheme={isDarkTheme} />
       
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative pt-[env(safe-area-inset-top)] pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
         {/* Background Grid Decoration */}
         <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]" 
              style={{ 
@@ -1306,10 +1306,10 @@ const App: React.FC = () => {
             <Header focusTask={focusTask} setFocusTask={setFocusTask} isDarkTheme={isDarkTheme} />
             
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="max-w-[1600px] mx-auto p-6 md:p-10 min-h-full flex flex-col lg:flex-row gap-8 lg:items-center justify-center">
+              <div className="max-w-[1600px] mx-auto p-4 md:p-10 min-h-full flex flex-col lg:flex-row gap-8 lg:items-center justify-center">
                 
                 {/* Center Timer Area */}
-                <div className="flex-1 flex justify-center items-center py-8 lg:py-0 order-1 lg:order-1">
+                <div className="flex-1 flex justify-center items-center py-2 md:py-8 lg:py-0 order-1 lg:order-1">
                    <TimerDisplay 
                      mode={mode} 
                      setMode={setMode} 
@@ -1363,7 +1363,7 @@ const App: React.FC = () => {
       {/* PWA Install Prompt - positioned at bottom left, non-intrusive */}
       <InstallPrompt />
 
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+      <div className="fixed left-4 right-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] md:left-auto md:right-6 md:bottom-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
         {toasts.map((toast, index) => (
           <div
             key={toast.id}
@@ -1374,7 +1374,7 @@ const App: React.FC = () => {
             }}
           >
             <div
-              className={`relative overflow-hidden rounded-2xl shadow-2xl backdrop-blur-xl min-w-[320px] max-w-[400px] ${
+              className={`relative overflow-hidden rounded-2xl shadow-2xl backdrop-blur-xl w-full md:w-auto md:min-w-[320px] max-w-[400px] ${
                 toast.type === 'focus-complete'
                   ? 'bg-gradient-to-r from-emerald-500/90 via-green-500/90 to-teal-500/90'
                   : toast.type === 'break-complete'

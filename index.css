@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    background-color: #020617;
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+  }
+}

@@ -157,7 +157,7 @@ const InstallPrompt: React.FC<InstallPromptProps> = ({ onDismiss, onInstall }) =
   // Show success toast after installation
   if (justInstalled) {
     return (
-      <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+      <div className="fixed bottom-24 md:bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
         <div className="bg-slate-800/95 backdrop-blur-sm border border-accent/30 rounded-xl p-4 shadow-lg shadow-accent/10 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
             <CheckCircle2 className="w-5 h-5 text-accent" />
@@ -175,7 +175,7 @@ const InstallPrompt: React.FC<InstallPromptProps> = ({ onDismiss, onInstall }) =
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+    <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
       <div className="bg-slate-800/95 backdrop-blur-sm border border-slate-700/50 rounded-xl p-4 shadow-xl">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">

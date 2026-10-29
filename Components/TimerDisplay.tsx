@@ -89,7 +89,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center gap-8 relative z-10 py-10">
+    <div className="flex flex-col items-center justify-center gap-6 md:gap-8 relative z-10 py-4 md:py-10 w-full">
       
       {/* Phase Indicator */}
       <div className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all duration-500 ${
@@ -115,7 +115,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
         `} style={{ backgroundColor: isRunning ? (isBreak ? 'rgba(96, 165, 250, 0.3)' : 'rgba(57, 255, 20, 0.3)') : 'transparent' }} />
 
         {/* SVG Ring */}
-        <div className={`relative w-[300px] h-[300px] md:w-[360px] md:h-[360px] rounded-full shadow-2xl flex items-center justify-center border-[6px] ${
+        <div className={`relative w-[min(300px,calc(100vw-4rem))] aspect-square md:w-[360px] rounded-full shadow-2xl flex items-center justify-center border-[6px] ${
           isDarkTheme 
             ? 'bg-[#050608] border-[#0F1420]' 
             : 'bg-gradient-to-br from-stone-100 to-stone-200 border-stone-300/60'
@@ -165,7 +165,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
                {phaseLabel}
              </span>
              
-             <h1 className={`text-6xl md:text-8xl font-mono font-bold tracking-tight tabular-nums relative z-10 drop-shadow-lg ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
+             <h1 className={`text-5xl min-[375px]:text-6xl md:text-8xl font-mono font-bold tracking-tight tabular-nums relative z-10 drop-shadow-lg ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
                {formatTime(timeLeft)}
              </h1>
              
@@ -237,7 +237,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
       </div>
 
       {/* Mode Selectors */}
-      <div className={`flex items-center gap-4 p-1.5 rounded-full border backdrop-blur-sm ${
+      <div className={`flex items-center gap-1 sm:gap-4 p-1.5 rounded-full border backdrop-blur-sm max-w-full ${
         isDarkTheme 
           ? 'bg-surface/40 border-white/5' 
           : 'bg-white/70 border-stone-200/60 shadow-sm'
@@ -245,7 +245,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <button
           onClick={() => { setMode(FocusMode.S1); }}
           className={`
-            px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
+            px-4 sm:px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
             ${mode === FocusMode.S1 
               ? 'bg-accent text-black shadow-glow-sm scale-105' 
               : isDarkTheme 
@@ -260,7 +260,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <button
           onClick={() => { setMode(FocusMode.S2); }}
           className={`
-            px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
+            px-4 sm:px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
             ${mode === FocusMode.S2 
               ? 'bg-accent text-black shadow-glow-sm scale-105' 
               : isDarkTheme 
@@ -275,7 +275,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
         <button
           onClick={openCustomModal}
           className={`
-            px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
+            px-4 sm:px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2
             ${mode === FocusMode.CUSTOM 
               ? 'bg-accent text-black shadow-glow-sm scale-105' 
               : isDarkTheme 

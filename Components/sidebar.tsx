@@ -15,7 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isDarkTheme 
   ];
 
   return (
-    <nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-screen md:static backdrop-blur-md border-t md:border-t-0 md:border-r flex md:flex-col justify-between items-center py-4 md:py-8 z-50 ${
+    <nav className={`fixed bottom-0 left-0 w-full md:w-20 md:h-[100dvh] md:static backdrop-blur-md border-t md:border-t-0 md:border-r flex md:flex-col justify-between items-center pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:py-8 z-50 ${
       isDarkTheme 
         ? 'bg-surface/50 border-white/5' 
         : 'bg-white/60 border-stone-200/60'

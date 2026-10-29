@@ -29,7 +29,7 @@ const Header: React.FC<HeaderProps> = ({ focusTask, setFocusTask, isDarkTheme = 
   };
 
   return (
-    <header className={`w-full h-16 md:h-20 flex items-center justify-between px-6 md:px-10 border-b bg-transparent ${
+    <header className={`w-full h-16 md:h-20 flex items-center justify-between px-4 md:px-10 border-b bg-transparent ${
       isDarkTheme ? 'border-white/5' : 'border-stone-200/60'
     }`}>
       {/* Left: Task Context */}
@@ -68,7 +68,7 @@ const Header: React.FC<HeaderProps> = ({ focusTask, setFocusTask, isDarkTheme = 
                 </span>
                 <button 
                   onClick={() => setIsEditing(true)}
-                  className={`p-1 opacity-0 group-hover:opacity-100 transition-opacity ${isDarkTheme ? 'text-slate-500 hover:text-accent' : 'text-stone-400 hover:text-accent'}`}
+                  className={`p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ${isDarkTheme ? 'text-slate-500 hover:text-accent' : 'text-stone-400 hover:text-accent'}`}
                 >
                   <Pencil size={14} />
                 </button>
