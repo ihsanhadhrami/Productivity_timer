@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Pause, SkipForward, RotateCcw, Coffee, Brain, BellOff, Settings, X } from 'lucide-react';
 import { FocusMode, TimerPhase } from '../types';
+import { TIMER_PRESETS, getPhaseMinutes } from '../hooks/useFocusTimer';
 
 interface TimerDisplayProps {
   mode: FocusMode;
@@ -49,17 +50,9 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Timer configurations
-  const TIMER_CONFIG = {
-    [FocusMode.S1]: { focus: 30 * 60, break: 5 * 60 },
-    [FocusMode.S2]: { focus: 60 * 60, break: 10 * 60 },
-    [FocusMode.CUSTOM]: { focus: customFocusTime * 60, break: customBreakTime * 60 },
-  };
-
   // Calculate progress for circle stroke based on current phase
-  const totalTime = phase === TimerPhase.FOCUS 
-    ? TIMER_CONFIG[mode].focus 
-    : TIMER_CONFIG[mode].break;
+  const phaseMinutes = getPhaseMinutes(mode, phase, { customFocusTime, customBreakTime });
+  const totalTime = phaseMinutes * 60;
   const progress = ((totalTime - timeLeft) / totalTime) * 100;
 
   // Colors based on phase
@@ -69,11 +62,9 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
   const PhaseIcon = isBreak ? Coffee : Brain;
 
   // Get time label for current mode
-  const getTimeLabel = () => {
-    if (mode === FocusMode.S1) return isBreak ? '5 min' : '30 min';
-    if (mode === FocusMode.S2) return isBreak ? '10 min' : '60 min';
-    return isBreak ? `${customBreakTime} min` : `${customFocusTime} min`;
-  };
+  const getTimeLabel = () => `${phaseMinutes} min`;
+  const presetLabel = (preset: FocusMode.S1 | FocusMode.S2) =>
+    `${TIMER_PRESETS[preset].focus}/${TIMER_PRESETS[preset].break}`;
 
   const handleSaveCustom = () => {
     setCustomFocusTime(tempFocus);
@@ -254,7 +245,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
           `}
         >
           <span>S1</span>
-          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S1 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>30/5</span>
+          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S1 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>{presetLabel(FocusMode.S1)}</span>
         </button>
 
         <button
@@ -269,7 +260,7 @@ const TimerDisplay: React.FC<TimerDisplayProps> = ({
           `}
         >
           <span>S2</span>
-          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S2 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>60/10</span>
+          <span className={`opacity-60 text-xs font-normal ${mode === FocusMode.S2 ? 'text-black' : isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>{presetLabel(FocusMode.S2)}</span>
         </button>
 
         <button

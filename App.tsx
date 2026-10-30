@@ -1,320 +1,103 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Sidebar from './Components/sidebar';
 import Header from './Components/Header';
 import TimerDisplay from './Components/TimerDisplay';
 import StatsPanel from './Components/Statspanel';
 import InstallPrompt from './Components/InstallPrompt';
-import { FocusMode, TimerPhase, SessionStats, SessionHistory, NotificationSound, ChunkProject } from './types';
 import ChunkingPanel from './Components/ChunkingPanel';
-import { Volume2, Check, RotateCcw, Trash2, Sun, Moon, Flame, X, PartyPopper, Coffee, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import SettingsPage from './Components/SettingsPage';
+import { ToastStack, useNotifications } from './Components/Notifications';
+import { NotificationSound, ChunkProject, FocusMode } from './types';
+import { useFocusTimer } from './hooks/useFocusTimer';
+import { useAlarm, NOTIFICATION_SOUNDS } from './hooks/useAlarm';
+import { useSessionTracking } from './hooks/useSessionTracking';
+import { STORAGE_KEYS, StorageCodec, jsonCodec, stringCodec, usePersistentState } from './hooks/usePersistentState';
 
-// Toast Notification Types
-interface ToastNotification {
-  id: string;
-  type: 'focus-complete' | 'break-complete' | 'info' | 'success' | 'warning';
-  title: string;
-  message: string;
-  icon: React.ReactNode;
-}
-
-// Timer configurations
-const TIMER_CONFIG = {
-  [FocusMode.S1]: { focus: 30 * 60, break: 5 * 60 },  // 30 min focus, 5 min break
-  [FocusMode.S2]: { focus: 60 * 60, break: 10 * 60 },  // 60 min focus, 10 min break
-  custom: { focus: 25 * 60, break: 5 * 60 },  // Custom default
+const themeCodec: StorageCodec<boolean> = {
+  parse: (raw) => raw !== 'light',
+  stringify: (isDark) => (isDark ? 'dark' : 'light'),
 };
 
-// Local Storage Keys
-const STORAGE_KEYS = {
-  stats: 'ihsan_timer_stats',
-  focusTask: 'ihsan_focus_task',
-  history: 'ihsan_session_history',
-  customTimer: 'ihsan_custom_timer',
-  theme: 'ihsan_theme',
-  dailyGoal: 'ihsan_daily_goal',
-  notificationSound: 'ihsan_notification_sound',
-  streak: 'ihsan_streak',
-  lastActiveDate: 'ihsan_last_active_date',
-  chunkProjects: 'ihsan_chunk_projects',
-};
-
-// Notification Sound Options
-const NOTIFICATION_SOUNDS: { id: NotificationSound; name: string; description: string }[] = [
-  { id: 'crystals', name: 'Crystals', description: 'iPhone-style melody' },
-  { id: 'chime', name: 'Chime', description: 'Gentle bell chime' },
-  { id: 'pulse', name: 'Pulse', description: 'Soft pulse beat' },
-  { id: 'bell', name: 'Bell', description: 'Classic bell ring' },
-  { id: 'synth', name: 'Synth Wave', description: 'Electronic tone' },
-];
-
-// Get today's date string for daily tracking
-const getTodayKey = () => new Date().toISOString().split('T')[0];
-
-// Safe localStorage helpers with error handling
-const safeGetItem = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key);
-  } catch (e) {
-    console.warn(`Failed to read from localStorage: ${key}`, e);
-    return null;
-  }
-};
-
-const safeSetItem = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    console.warn(`Failed to write to localStorage: ${key}`, e);
-  }
-};
-
-const safeParseJSON = <T,>(json: string | null, fallback: T): T => {
-  if (!json) return fallback;
-  try {
-    return JSON.parse(json) as T;
-  } catch (e) {
-    console.warn('Failed to parse JSON:', e);
-    return fallback;
-  }
+const soundCodec: StorageCodec<NotificationSound> = {
+  parse: (raw) => NOTIFICATION_SOUNDS.find(s => s.id === raw)?.id,
+  stringify: (sound) => sound,
 };
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [mode, setMode] = useState<FocusMode>(FocusMode.S1);
-  const [phase, setPhase] = useState<TimerPhase>(TimerPhase.FOCUS);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isAlarmPlaying, setIsAlarmPlaying] = useState(false);
-  
-  // Theme state
-  const [isDarkTheme, setIsDarkTheme] = useState(() => {
-    const saved = safeGetItem(STORAGE_KEYS.theme);
-    return saved !== 'light';
-  });
-  
-  // Streak counter
-  const [streak, setStreak] = useState(() => {
-    const saved = safeGetItem(STORAGE_KEYS.streak);
-    return saved ? parseInt(saved, 10) || 0 : 0;
-  });
-  
-  const [lastActiveDate, setLastActiveDate] = useState(() => {
-    return safeGetItem(STORAGE_KEYS.lastActiveDate) || '';
-  });
-  
-  // Chunking projects state
-  const [chunkProjects, setChunkProjects] = useState<ChunkProject[]>(() => {
-    const saved = safeGetItem(STORAGE_KEYS.chunkProjects);
-    return safeParseJSON<ChunkProject[]>(saved, []);
-  });
 
-  // Custom timer settings
-  const [customFocusTime, setCustomFocusTime] = useState(25);
-  const [customBreakTime, setCustomBreakTime] = useState(5);
-  
-  // Notification sound
-  const [selectedSound, setSelectedSound] = useState<NotificationSound>(() => {
-    const saved = safeGetItem(STORAGE_KEYS.notificationSound);
-    const validSounds: NotificationSound[] = ['crystals', 'chime', 'pulse', 'bell', 'synth'];
-    return validSounds.includes(saved as NotificationSound) ? (saved as NotificationSound) : 'crystals';
-  });
-  
-  // Focus task
-  const [focusTask, setFocusTask] = useState(() => {
-    const saved = safeGetItem(STORAGE_KEYS.focusTask);
-    return saved || 'What are you working on?';
-  });
-  
-  // Session history
-  const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>(() => {
-    const saved = safeGetItem(STORAGE_KEYS.history);
-    return safeParseJSON<SessionHistory[]>(saved, []);
-  });
-  
-  // Refs for audio context and interval
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const alarmIntervalRef = useRef<number | null>(null);
-  const sharedAudioContextRef = useRef<AudioContext | null>(null); // Persistent context for mobile
-  const isAudioUnlockedRef = useRef<boolean>(false); // Track if audio has been unlocked
-  const vibrationIntervalRef = useRef<number | null>(null); // Persistent vibration during alarm
-  const hapticNodeRef = useRef<OscillatorNode | null>(null); // iOS haptic oscillator
-  
-  // Web Worker and Wake Lock refs for background timer
-  const timerWorkerRef = useRef<Worker | null>(null);
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  
-  // Toast notifications state
-  const [toasts, setToasts] = useState<ToastNotification[]>([]);
-  
-  // Background tab support
-  const [isTabVisible, setIsTabVisible] = useState(true);
-  const [hasNotificationPermission, setHasNotificationPermission] = useState(
-    typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false
-  );
-  
-  // Timer State
-  const getInitialTime = (m: FocusMode, p: TimerPhase) => {
-    if (m === FocusMode.CUSTOM) {
-      return p === TimerPhase.FOCUS ? customFocusTime * 60 : customBreakTime * 60;
-    }
-    return p === TimerPhase.FOCUS ? TIMER_CONFIG[m].focus : TIMER_CONFIG[m].break;
-  };
-  const [timeLeft, setTimeLeft] = useState(getInitialTime(mode, phase));
+  // Preferences and user content, saved to localStorage
+  const [isDarkTheme, setIsDarkTheme] = usePersistentState(STORAGE_KEYS.theme, true, themeCodec);
+  const [selectedSound, setSelectedSound] = usePersistentState<NotificationSound>(STORAGE_KEYS.notificationSound, 'crystals', soundCodec);
+  const [focusTask, setFocusTask] = usePersistentState(STORAGE_KEYS.focusTask, 'What are you working on?', stringCodec);
+  const [chunkProjects, setChunkProjects] = usePersistentState<ChunkProject[]>(STORAGE_KEYS.chunkProjects, [], jsonCodec<ChunkProject[]>());
 
-  // Stats with localStorage
-  const [stats, setStats] = useState<SessionStats>(() => {
-    const saved = safeGetItem(STORAGE_KEYS.stats);
-    const defaultStats: SessionStats = {
-      s1Count: 0,
-      s2Count: 0,
-      customCount: 0,
-      totalMinutes: 0,
-      dailyGoal: 5,
-      date: getTodayKey()
-    };
-    const parsed = safeParseJSON<SessionStats>(saved, defaultStats);
-    // Check if stats are from today
-    if (parsed.date === getTodayKey()) {
-      return parsed;
-    }
-    return defaultStats;
-  });
+  const tracking = useSessionTracking();
+  const notifications = useNotifications();
 
-  // Save to localStorage when stats change
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.stats, JSON.stringify(stats));
-  }, [stats]);
+  // The alarm needs to know if the timer runs, and the timer rings the alarm,
+  // so the timer reaches the alarm through a ref
+  const playAlarmRef = useRef<() => void>(() => {});
 
-  // Save focus task to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.focusTask, focusTask);
-  }, [focusTask]);
-
-  // Save session history to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.history, JSON.stringify(sessionHistory));
-  }, [sessionHistory]);
-
-  // Save selected sound to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.notificationSound, selectedSound);
-  }, [selectedSound]);
-
-  // Save theme to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.theme, isDarkTheme ? 'dark' : 'light');
-  }, [isDarkTheme]);
-
-  // Save chunk projects to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.chunkProjects, JSON.stringify(chunkProjects));
-  }, [chunkProjects]);
-
-  // Save streak to localStorage
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.streak, streak.toString());
-  }, [streak]);
-
-  // Save last active date
-  useEffect(() => {
-    safeSetItem(STORAGE_KEYS.lastActiveDate, lastActiveDate);
-  }, [lastActiveDate]);
-
-  // Request notification permission on mount
-  useEffect(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      console.log('🔔 Requesting notification permission...');
-      Notification.requestPermission().then(permission => {
-        setHasNotificationPermission(permission === 'granted');
-        if (permission === 'granted') {
-          console.log('✅ Notification permission granted');
-        } else {
-          console.log('❌ Notification permission denied');
-        }
+  const timer = useFocusTimer({
+    onFocusComplete: (mode: FocusMode, minutes: number) => {
+      playAlarmRef.current();
+      notifications.notify('focus-complete', 'Focus Complete! 🎉', 'Great job! Time for a break.', {
+        whenHidden: {
+          title: '🎉 Focus Complete!',
+          body: `Great work! You completed a ${minutes}-minute focus session. Time for a break!`,
+        },
       });
-    }
-  }, []);
+      tracking.recordFocusSession(mode, minutes, focusTask);
+    },
+    onBreakComplete: () => {
+      playAlarmRef.current();
+      notifications.notify('break-complete', 'Break Over! 💪', 'Ready for another focus session?', {
+        whenHidden: {
+          title: '💪 Break Over!',
+          body: 'Your break is complete. Ready for another focus session?',
+        },
+      });
+    },
+  });
 
-  // Page Visibility API - Track when user switches tabs/apps
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      const visible = !document.hidden;
-      setIsTabVisible(visible);
-      console.log(visible ? '👀 Tab visible' : '🙈 Tab hidden');
-      
-      // If returning to tab while timer is running, sync with worker
-      if (visible && isRunning && timerWorkerRef.current) {
-        console.log('🔄 Syncing timer state after tab visibility change');
-        timerWorkerRef.current.postMessage({ type: 'getStatus' });
-      }
-    };
+  const alarm = useAlarm(selectedSound, timer.isRunning);
+  playAlarmRef.current = alarm.playAlarm;
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isRunning]);
+  // Keyboard shortcuts. Handlers are read through a ref so they always act on the current state.
+  const shortcutsRef = useRef({ timer, alarm });
+  shortcutsRef.current = { timer, alarm };
 
-  // Check and update streak on app load and when completing a session
-  const updateStreak = useCallback(() => {
-    const today = getTodayKey();
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
-    if (lastActiveDate === today) {
-      // Already active today, streak continues
-      return;
-    } else if (lastActiveDate === yesterday) {
-      // Was active yesterday, increment streak
-      setStreak(prev => prev + 1);
-    } else if (lastActiveDate === '') {
-      // First time user
-      setStreak(1);
-    } else {
-      // Streak broken, reset to 1
-      setStreak(1);
-    }
-    setLastActiveDate(today);
-  }, [lastActiveDate]);
-
-  // Toggle theme
-  const toggleTheme = () => {
-    setIsDarkTheme(prev => !prev);
-  };
-
-  // Reset timer when mode changes
-  useEffect(() => {
-    setIsRunning(false);
-    setPhase(TimerPhase.FOCUS);
-    setTimeLeft(getInitialTime(mode, TimerPhase.FOCUS));
-  }, [mode, customFocusTime]);
-
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if typing in input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      
+      const { timer, alarm } = shortcutsRef.current;
+
       switch (e.code) {
         case 'Space':
           e.preventDefault();
-          if (!isAlarmPlaying) {
-            setIsRunning(prev => !prev);
+          if (!alarm.isAlarmPlaying) {
+            timer.setIsRunning(prev => !prev);
           }
           break;
         case 'KeyR':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            resetTimer();
+            timer.reset();
           }
           break;
         case 'KeyS':
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            skipPhase();
+            timer.skip();
           }
           break;
         case 'Escape':
-          if (isAlarmPlaying) {
-            stopAlarm();
+          if (alarm.isAlarmPlaying) {
+            alarm.stopAlarm();
           }
           break;
       }
@@ -322,965 +105,19 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAlarmPlaying]);
-
-  // Browser notification - Send notification when timer completes in background
-  const sendBrowserNotification = useCallback((title: string, body: string, urgent = false) => {
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-      console.log('🔕 Notifications not available or not permitted');
-      return;
-    }
-
-    try {
-      const notification = new Notification(title, {
-        body,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
-        tag: 'timer-complete',
-        requireInteraction: urgent, // Keep notification visible for urgent alerts
-        silent: false,
-      });
-
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-
-      console.log('🔔 Browser notification sent:', title);
-    } catch (e) {
-      console.warn('❌ Failed to send browser notification:', e);
-    }
   }, []);
-
-  // Show toast notification
-  const showToast = useCallback((type: ToastNotification['type'], title: string, message: string) => {
-    const icons: Record<ToastNotification['type'], React.ReactNode> = {
-      'focus-complete': <PartyPopper className="w-6 h-6" />,
-      'break-complete': <Zap className="w-6 h-6" />,
-      'info': <Coffee className="w-6 h-6" />,
-      'success': <CheckCircle2 className="w-6 h-6" />,
-      'warning': <AlertTriangle className="w-6 h-6" />,
-    };
-    
-    const newToast: ToastNotification = {
-      id: Date.now().toString(),
-      type,
-      title,
-      message,
-      icon: icons[type],
-    };
-    
-    setToasts(prev => [...prev, newToast]);
-    
-    // Auto dismiss after 5 seconds
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== newToast.id));
-    }, 5000);
-  }, []);
-  
-  // Dismiss toast
-  const dismissToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
-
-  // Send browser notification
-  const sendNotification = useCallback((title: string, body: string, type: ToastNotification['type'] = 'info') => {
-    // Show in-app toast
-    showToast(type, title, body);
-    
-    // Also send browser notification
-    try {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-          body,
-          icon: '/favicon.ico',
-          tag: 'timer-notification',
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to send notification:', e);
-    }
-  }, [showToast]);
-
-  // Unlock AudioContext for mobile browsers (must be called on user interaction)
-  const unlockAudioContext = useCallback(() => {
-    console.log('🔓 Unlocking AudioContext...');
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) {
-        console.warn('❌ AudioContext not supported on this device');
-        return false;
-      }
-      
-      // Always create fresh context if none exists or if closed
-      if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
-        sharedAudioContextRef.current = new AudioContextClass();
-        console.log('✅ Created new AudioContext, state:', sharedAudioContextRef.current.state);
-      }
-      
-      const ctx = sharedAudioContextRef.current;
-      
-      // SAFARI FIX: Must resume AND play sound on same user gesture
-      if (ctx.state === 'suspended') {
-        console.log('⏸️  AudioContext suspended, resuming...');
-        ctx.resume().then(() => {
-          console.log('▶️  AudioContext resumed, state:', ctx.state);
-          isAudioUnlockedRef.current = ctx.state === 'running';
-          
-          // Safari: Play silent buffer immediately after resume
-          try {
-            const buffer = ctx.createBuffer(1, 1, 22050);
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(ctx.destination);
-            source.start(0);
-            console.log('🔇 Silent buffer played for unlock');
-          } catch (bufferError) {
-            console.warn('⚠️  Silent buffer error (non-critical):', bufferError);
-          }
-        }).catch(e => {
-          console.warn('❌ Failed to resume AudioContext:', e);
-          isAudioUnlockedRef.current = false;
-        });
-      } else if (ctx.state === 'running') {
-        console.log('✅ AudioContext already running');
-        isAudioUnlockedRef.current = true;
-        
-        // Play silent buffer even if running (Safari requirement)
-        try {
-          const buffer = ctx.createBuffer(1, 1, 22050);
-          const source = ctx.createBufferSource();
-          source.buffer = buffer;
-          source.connect(ctx.destination);
-          source.start(0);
-          console.log('🔇 Silent buffer played for iOS');
-        } catch (bufferError) {
-          console.warn('⚠️  Silent buffer error:', bufferError);
-        }
-      }
-      
-      return true;
-      
-    } catch (e) {
-      console.warn('❌ Failed to unlock AudioContext:', e);
-      return false;
-    }
-  }, []);
-
-  // Sound generators for different notification sounds
-  const playSound = useCallback(async (soundType: NotificationSound, preview = false): Promise<boolean> => {
-    console.log('🔊 playSound called:', soundType, 'preview:', preview);
-    
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) {
-        console.warn('❌ AudioContext not supported');
-        throw new Error('AudioContext not supported');
-      }
-      
-      let audioContext: AudioContext;
-      
-      if (preview) {
-        // For preview, always create new context
-        audioContext = new AudioContextClass();
-        console.log('🎵 Created new AudioContext for preview');
-      } else {
-        // For alarm, use or create shared context
-        // SAFARI FIX: NEVER close the context, always reuse
-        if (!sharedAudioContextRef.current || sharedAudioContextRef.current.state === 'closed') {
-          console.log('🆕 Creating new shared AudioContext for alarm');
-          sharedAudioContextRef.current = new AudioContextClass();
-        }
-        audioContext = sharedAudioContextRef.current;
-        audioContextRef.current = audioContext;
-      }
-      
-      console.log('📍 AudioContext state before resume:', audioContext.state);
-      
-      // CRITICAL: Wait for resume to complete before playing
-      // Safari will NOT play audio if context is suspended
-      if (audioContext.state === 'suspended') {
-        console.log('⏸️  AudioContext suspended, attempting resume...');
-        try {
-          await audioContext.resume();
-          console.log('▶️  AudioContext resumed successfully, state:', audioContext.state);
-          
-          // Safari: Wait a tiny bit for resume to fully complete
-          await new Promise(resolve => setTimeout(resolve, 10));
-          
-        } catch (resumeError) {
-          console.warn('❌ Resume failed:', resumeError);
-          
-          // Safari fallback: Create completely new context
-          if (!preview) {
-            console.log('🔄 Creating fallback AudioContext');
-            audioContext = new AudioContextClass();
-            sharedAudioContextRef.current = audioContext;
-            audioContextRef.current = audioContext;
-            
-            // Try resume again on new context
-            if (audioContext.state === 'suspended') {
-              await audioContext.resume();
-            }
-          } else {
-            throw resumeError;
-          }
-        }
-      }
-      
-      // Final state check - MUST be running
-      if (audioContext.state !== 'running') {
-        console.warn('⚠️  AudioContext not running after resume, state:', audioContext.state);
-        
-        // Last resort: try resume one more time
-        try {
-          await audioContext.resume();
-          await new Promise(resolve => setTimeout(resolve, 10));
-        } catch (e) {
-          console.error('❌ Cannot get AudioContext to run');
-          throw new Error('AudioContext failed to run');
-        }
-      }
-      
-      console.log('✅ AudioContext ready, state:', audioContext.state);
-    
-    const playMelody = () => {
-      let notes: { freq: number; duration: number; type?: OscillatorType }[] = [];
-      
-      switch (soundType) {
-        case 'crystals':
-          // iPhone Crystals-like melody
-          notes = [
-            { freq: 1318.5, duration: 0.15 }, // E6
-            { freq: 1567.98, duration: 0.15 }, // G6
-            { freq: 1760, duration: 0.15 }, // A6
-            { freq: 1567.98, duration: 0.15 }, // G6
-            { freq: 1318.5, duration: 0.15 }, // E6
-            { freq: 1174.66, duration: 0.3 }, // D6
-          ];
-          break;
-        case 'chime':
-          // Gentle bell chime
-          notes = [
-            { freq: 523.25, duration: 0.4 }, // C5
-            { freq: 659.25, duration: 0.4 }, // E5
-            { freq: 783.99, duration: 0.6 }, // G5
-          ];
-          break;
-        case 'pulse':
-          // Soft pulse beat
-          notes = [
-            { freq: 220, duration: 0.1, type: 'sine' },
-            { freq: 0, duration: 0.1 },
-            { freq: 220, duration: 0.1, type: 'sine' },
-            { freq: 0, duration: 0.1 },
-            { freq: 330, duration: 0.2, type: 'sine' },
-          ];
-          break;
-        case 'bell':
-          // Classic bell ring
-          notes = [
-            { freq: 830.6, duration: 0.5 }, // G#5
-            { freq: 0, duration: 0.1 },
-            { freq: 830.6, duration: 0.5 }, // G#5
-          ];
-          break;
-        case 'synth':
-          // Electronic synth wave
-          notes = [
-            { freq: 440, duration: 0.1, type: 'sawtooth' },
-            { freq: 554.37, duration: 0.1, type: 'sawtooth' },
-            { freq: 659.25, duration: 0.1, type: 'sawtooth' },
-            { freq: 880, duration: 0.3, type: 'sawtooth' },
-          ];
-          break;
-      }
-      
-      let startTime = audioContext.currentTime;
-      
-      notes.forEach((note) => {
-        if (note.freq === 0) {
-          startTime += note.duration;
-          return;
-        }
-        
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = note.freq;
-        oscillator.type = note.type || 'sine';
-        
-        gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + note.duration);
-        
-        oscillator.start(startTime);
-        oscillator.stop(startTime + note.duration);
-        
-        startTime += note.duration;
-      });
-    };
-    
-    playMelody();
-    console.log('🎶 First melody played');
-    
-    if (!preview) {
-      // Repeat for alarm - Safari needs careful interval handling
-      alarmIntervalRef.current = window.setInterval(async () => {
-        try {
-          // Check if shared context exists and is usable
-          const ctx = sharedAudioContextRef.current;
-          
-          if (!ctx) {
-            console.warn('⚠️  No AudioContext in alarm interval');
-            return;
-          }
-          
-          // Safari: Check context state and resume if needed
-          if (ctx.state !== 'running') {
-            console.log('⏸️  Context not running during alarm (state:', ctx.state, '), resuming...');
-            try {
-              await ctx.resume();
-              console.log('▶️  Context resumed, state:', ctx.state);
-            } catch (resumeError) {
-              console.warn('❌ Failed to resume in alarm interval:', resumeError);
-            }
-          }
-          
-          // Play melody if context is now running
-          if (ctx.state === 'running') {
-            playMelody();
-            console.log('🔁 Alarm repeat - melody played');
-          } else {
-            console.warn('⚠️  AudioContext still not running, state:', ctx.state);
-          }
-        } catch (intervalError) {
-          console.warn('❌ Error in alarm interval:', intervalError);
-        }
-      }, 1500);
-      
-      setIsAlarmPlaying(true);
-      console.log('⏰ Alarm started, will repeat every 1.5s');
-      return true;
-    } else {
-      // For preview, close after playing once
-      setTimeout(() => {
-        try {
-          audioContext.close();
-          console.log('🔇 Preview AudioContext closed');
-        } catch (e) {
-          console.warn('⚠️  Error closing preview context:', e);
-        }
-      }, 2000);
-      return true;
-    }
-    } catch (e) {
-      console.error('❌ Failed to play sound:', e);
-      
-      // Fallback: Try vibration on mobile devices
-      if ('vibrate' in navigator) {
-        try {
-          navigator.vibrate([200, 100, 200, 100, 200]);
-          console.log('📳 Using vibration fallback');
-        } catch (vibError) {
-          console.warn('❌ Vibration also failed:', vibError);
-        }
-      }
-      
-      return false;
-    }
-  }, []);
-
-  // Start persistent vibration pattern that repeats with the alarm
-  const startVibration = useCallback(() => {
-    // Clear any existing vibration interval
-    if (vibrationIntervalRef.current) {
-      clearInterval(vibrationIntervalRef.current);
-      vibrationIntervalRef.current = null;
-    }
-
-    // Android/Windows: Use Vibration API with repeating pattern
-    if ('vibrate' in navigator) {
-      try {
-        navigator.vibrate([300, 100, 300, 100, 300]);
-        // Repeat vibration every 1.5s to sync with alarm sound
-        vibrationIntervalRef.current = window.setInterval(() => {
-          try {
-            navigator.vibrate([300, 100, 300, 100, 300]);
-          } catch (_) {}
-        }, 1500);
-        console.log('📳 Vibration started (Vibration API)');
-      } catch (_) {}
-    }
-
-    // iOS/Safari: Vibration API is NOT supported.
-    // Use a sub-bass oscillator (1Hz) routed to speaker at low gain.
-    // On Apple devices this causes physical haptic feedback via the Taptic Engine
-    // even when the ringer switch is muted, because AudioContext output
-    // bypasses the mute switch when the session is already active.
-    try {
-      const ctx = sharedAudioContextRef.current;
-      if (ctx && ctx.state === 'running') {
-        // Stop any previous haptic node
-        if (hapticNodeRef.current) {
-          try { hapticNodeRef.current.stop(); } catch (_) {}
-          hapticNodeRef.current = null;
-        }
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1, ctx.currentTime); // Sub-bass 1 Hz
-        gain.gain.setValueAtTime(0.15, ctx.currentTime); // Low volume
-        // Pulsing pattern: ramp up and down
-        const now = ctx.currentTime;
-        for (let i = 0; i < 20; i++) {
-          const t = now + i * 1.5;
-          gain.gain.setValueAtTime(0, t);
-          gain.gain.linearRampToValueAtTime(0.15, t + 0.3);
-          gain.gain.setValueAtTime(0.15, t + 0.6);
-          gain.gain.linearRampToValueAtTime(0, t + 0.9);
-        }
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 30); // Auto-stop after 30s safety limit
-        hapticNodeRef.current = osc;
-        console.log('📳 iOS haptic oscillator started');
-      }
-    } catch (e) {
-      console.warn('⚠️ iOS haptic simulation failed:', e);
-    }
-  }, []);
-
-  // Stop all vibration
-  const stopVibration = useCallback(() => {
-    if (vibrationIntervalRef.current) {
-      clearInterval(vibrationIntervalRef.current);
-      vibrationIntervalRef.current = null;
-    }
-    if ('vibrate' in navigator) {
-      try { navigator.vibrate(0); } catch (_) {}
-    }
-    if (hapticNodeRef.current) {
-      try { hapticNodeRef.current.stop(); } catch (_) {}
-      hapticNodeRef.current = null;
-    }
-    console.log('📳 Vibration stopped');
-  }, []);
-
-  // Play alarm with selected sound
-  const playAlarm = useCallback(async () => {
-    console.log('playAlarm called, selected sound:', selectedSound);
-    
-    // Try to play sound
-    await playSound(selectedSound);
-    
-    // Start persistent vibration (Android + iOS haptic)
-    startVibration();
-  }, [playSound, selectedSound, startVibration]);
-  
-  // Re-unlock audio context periodically while timer is running (iOS fix)
-  useEffect(() => {
-    let keepAliveInterval: number | undefined;
-    
-    if (isRunning && sharedAudioContextRef.current) {
-      keepAliveInterval = window.setInterval(() => {
-        const ctx = sharedAudioContextRef.current;
-        if (ctx && ctx.state === 'suspended') {
-          ctx.resume().catch(() => {});
-        }
-      }, 5000); // Check every 5 seconds
-    }
-    
-    return () => {
-      if (keepAliveInterval) {
-        clearInterval(keepAliveInterval);
-      }
-    };
-  }, [isRunning]);
-
-
-  // Stop alarm sound
-  const stopAlarm = useCallback(() => {
-    try {
-      // Clear the repeating interval
-      if (alarmIntervalRef.current) {
-        clearInterval(alarmIntervalRef.current);
-        alarmIntervalRef.current = null;
-        console.log('Alarm interval cleared');
-      }
-      
-      // DON'T close the shared AudioContext - we want to reuse it!
-      // Just clear the reference to the current alarm context
-      // This fixes the issue where audio won't play after stopping alarm
-      audioContextRef.current = null;
-      
-      // Note: We intentionally don't close sharedAudioContextRef
-      // because closing it would require user interaction to unlock again
-      
-      // Stop all vibration and haptic feedback
-      stopVibration();
-      
-    } catch (e) {
-      console.warn('Error stopping alarm:', e);
-    }
-    setIsAlarmPlaying(false);
-  }, [stopVibration]);
-
-  // Add session to history
-  const addToHistory = useCallback((sessionType: string, duration: number) => {
-    const newSession: SessionHistory = {
-      id: Date.now().toString(),
-      type: sessionType,
-      duration,
-      task: focusTask,
-      completedAt: new Date().toISOString(),
-      date: getTodayKey()
-    };
-    setSessionHistory(prev => [newSession, ...prev].slice(0, 100)); // Keep last 100 sessions
-    
-    // Update streak when completing a session
-    updateStreak();
-  }, [focusTask, updateStreak]);
-
-  // Initialize Web Worker for background timer
-  useEffect(() => {
-    console.log('🏭 Initializing Web Worker...');
-    
-    // Create worker with error handling
-    try {
-      timerWorkerRef.current = new Worker('/timer-worker.js');
-      console.log('✅ Timer Web Worker initialized');
-      
-      // Handle messages from worker
-      timerWorkerRef.current.onmessage = (e) => {
-        try {
-          if (!e || !e.data) {
-            console.warn('⚠️  Invalid message from worker');
-            return;
-          }
-          
-          const { type, timeLeft: workerTimeLeft, error } = e.data;
-          
-          if (type === 'TICK') {
-            setTimeLeft(workerTimeLeft);
-          } else if (type === 'COMPLETE') {
-            console.log('✅ Timer completed (from worker)');
-            setTimeLeft(0);
-          } else if (type === 'ERROR') {
-            console.error('❌ Worker error:', error);
-          } else {
-            console.warn('⚠️  Unknown message type from worker:', type);
-          }
-        } catch (msgError) {
-          console.error('❌ Error handling worker message:', msgError);
-        }
-      };
-      
-      timerWorkerRef.current.onerror = (error) => {
-        console.error('❌ Timer Worker error:', error);
-      };
-      
-    } catch (e) {
-      console.warn('⚠️  Web Worker not supported or failed to load, using fallback timer:', e);
-      // Set to null to trigger fallback
-      timerWorkerRef.current = null;
-    }
-    
-    return () => {
-      if (timerWorkerRef.current) {
-        console.log('🧹 Terminating Web Worker');
-        try {
-          timerWorkerRef.current.terminate();
-        } catch (e) {
-          console.warn('⚠️  Error terminating worker:', e);
-        }
-        timerWorkerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Wake Lock API - Prevent screen from turning off while timer is running
-  const requestWakeLock = useCallback(async () => {
-    if ('wakeLock' in navigator) {
-      try {
-        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-        console.log('Wake Lock activated - screen will stay on');
-        
-        if (wakeLockRef.current) {
-          wakeLockRef.current.addEventListener('release', () => {
-            console.log('Wake Lock released');
-          });
-        }
-      } catch (e) {
-        console.warn('Wake Lock request failed:', e);
-      }
-    }
-  }, []);
-
-  const releaseWakeLock = useCallback(() => {
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release();
-      wakeLockRef.current = null;
-      console.log('Wake Lock manually released');
-    }
-  }, []);
-
-  // Re-acquire wake lock when page becomes visible again
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isRunning) {
-        requestWakeLock();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isRunning, requestWakeLock]);
-
-  // Timer Logic - Use Web Worker if available, fallback to setInterval
-  useEffect(() => {
-    let fallbackInterval: number | undefined;
-
-    if (isRunning && timeLeft > 0) {
-      // Request wake lock to keep screen on
-      requestWakeLock();
-      
-      if (timerWorkerRef.current) {
-        // Use Web Worker for accurate background timing
-        timerWorkerRef.current.postMessage({ type: 'START', payload: { timeLeft } });
-      } else {
-        // Fallback to regular interval
-        fallbackInterval = window.setInterval(() => {
-          setTimeLeft((prev) => prev - 1);
-        }, 1000);
-      }
-    } else if (!isRunning) {
-      // Pause or stop
-      if (timerWorkerRef.current) {
-        timerWorkerRef.current.postMessage({ type: 'PAUSE' });
-      }
-      releaseWakeLock();
-    }
-    
-    // Handle timer completion
-    if (isRunning && timeLeft === 0) {
-      // Timer completed - switch phase
-      if (phase === TimerPhase.FOCUS) {
-        // Focus completed, play alarm and switch to break
-        playAlarm();
-        sendNotification('Focus Complete! 🎉', `Great job! Time for a break.`, 'focus-complete');
-        
-        // Send browser notification if tab is hidden (background)
-        if (!isTabVisible) {
-          sendBrowserNotification(
-            '🎉 Focus Complete!',
-            `Great work! You completed a ${mode === FocusMode.S1 ? '30' : mode === FocusMode.S2 ? '60' : customFocusTime}-minute focus session. Time for a break!`,
-            true
-          );
-        }
-        
-        const sessionLength = mode === FocusMode.S1 ? 30 : mode === FocusMode.S2 ? 60 : customFocusTime;
-        
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          s1Count: mode === FocusMode.S1 ? prev.s1Count + 1 : prev.s1Count,
-          s2Count: mode === FocusMode.S2 ? prev.s2Count + 1 : prev.s2Count,
-          customCount: mode === FocusMode.CUSTOM ? (prev.customCount || 0) + 1 : (prev.customCount || 0),
-          totalMinutes: prev.totalMinutes + sessionLength
-        }));
-        
-        // Add to history
-        addToHistory(mode, sessionLength);
-        
-        setPhase(TimerPhase.BREAK);
-        const breakTime = mode === FocusMode.CUSTOM ? customBreakTime * 60 : TIMER_CONFIG[mode].break;
-        setTimeLeft(breakTime);
-        setIsRunning(false); // Stop and wait for user to acknowledge
-      } else {
-        // Break completed - STOP completely and play alarm
-        playAlarm();
-        sendNotification('Break Over! 💪', 'Ready for another focus session?', 'break-complete');
-        
-        // Send browser notification if tab is hidden (background)
-        if (!isTabVisible) {
-          sendBrowserNotification(
-            '💪 Break Over!',
-            'Your break is complete. Ready for another focus session?',
-            true
-          );
-        }
-        
-        setIsRunning(false); // Stop after break, session complete
-      }
-      
-      releaseWakeLock();
-    }
-
-    return () => {
-      if (fallbackInterval) clearInterval(fallbackInterval);
-    };
-  }, [isRunning, timeLeft, mode, phase, playAlarm, sendNotification, focusTask, customFocusTime, customBreakTime, addToHistory, requestWakeLock, releaseWakeLock, isTabVisible, sendBrowserNotification]);
-
-  // Function to skip to next phase
-  const skipPhase = () => {
-    if (phase === TimerPhase.FOCUS) {
-      setPhase(TimerPhase.BREAK);
-      const breakTime = mode === FocusMode.CUSTOM ? customBreakTime * 60 : TIMER_CONFIG[mode].break;
-      setTimeLeft(breakTime);
-      // Sync with worker
-      if (timerWorkerRef.current) {
-        timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: breakTime } });
-      }
-    } else {
-      // Reset to focus for new session
-      setPhase(TimerPhase.FOCUS);
-      const focusTime = getInitialTime(mode, TimerPhase.FOCUS);
-      setTimeLeft(focusTime);
-      // Sync with worker
-      if (timerWorkerRef.current) {
-        timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: focusTime } });
-      }
-    }
-    setIsRunning(false);
-    releaseWakeLock();
-  };
-
-  // Function to reset current phase
-  const resetTimer = () => {
-    const newTime = getInitialTime(mode, phase);
-    setTimeLeft(newTime);
-    setIsRunning(false);
-    // Sync with worker
-    if (timerWorkerRef.current) {
-      timerWorkerRef.current.postMessage({ type: 'RESET', payload: { timeLeft: newTime } });
-    }
-    releaseWakeLock();
-  };
-
-  // Function to reset all stats
-  const resetStats = () => {
-    setStats({
-      s1Count: 0,
-      s2Count: 0,
-      customCount: 0,
-      totalMinutes: 0,
-      dailyGoal: stats.dailyGoal,
-      date: getTodayKey()
-    });
-  };
-
-  // Function to update daily goal
-  const updateDailyGoal = (goal: number) => {
-    setStats(prev => ({ ...prev, dailyGoal: goal }));
-  };
-
-  // Function to clear history
-  const clearHistory = () => {
-    setSessionHistory([]);
-  };
-
-  // Get today's sessions from history
-  const todaySessions = sessionHistory.filter(s => s.date === getTodayKey());
-
-  // Settings Page Component
-  const SettingsPage = () => (
-    <div className={`max-w-2xl mx-auto p-4 md:p-10 ${isDarkTheme ? '' : 'text-stone-800'}`}>
-      <h1 className={`text-3xl font-bold mb-8 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>Settings</h1>
-      
-      {/* Streak Display */}
-      <div className={`${isDarkTheme ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/30' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl ${isDarkTheme ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-orange-400 to-red-400'} flex items-center justify-center shadow-lg`}>
-              <Flame size={28} className="text-white" />
-            </div>
-            <div>
-              <p className={`text-sm ${isDarkTheme ? 'text-orange-300' : 'text-orange-600/80'} font-medium`}>Current Streak</p>
-              <p className={`text-3xl font-bold ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>{streak} {streak === 1 ? 'day' : 'days'}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className={`text-xs ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>
-              {streak >= 7 ? '🔥 On fire!' : streak >= 3 ? '💪 Keep going!' : '🌱 Building momentum!'}
-            </p>
-            <p className={`text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'} mt-1`}>
-              Complete sessions daily to maintain streak
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Theme Toggle */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
-          {isDarkTheme ? <Moon size={20} className="text-blue-400" /> : <Sun size={20} className="text-yellow-500" />}
-          Appearance
-        </h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`font-medium ${isDarkTheme ? 'text-slate-200' : 'text-stone-700'}`}>Theme</p>
-            <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
-              {isDarkTheme ? 'Dark mode enabled' : 'Light mode enabled'}
-            </p>
-          </div>
-          <button
-            onClick={toggleTheme}
-            className={`relative w-16 h-9 rounded-full transition-all duration-300 ${
-              isDarkTheme 
-                ? 'bg-gradient-to-r from-indigo-500 to-purple-500' 
-                : 'bg-gradient-to-r from-yellow-400 to-orange-400'
-            }`}
-          >
-            <div className={`absolute top-1 w-7 h-7 rounded-full bg-white shadow-lg transition-all duration-300 flex items-center justify-center ${
-              isDarkTheme ? 'left-8' : 'left-1'
-            }`}>
-              {isDarkTheme ? (
-                <Moon size={14} className="text-indigo-500" />
-              ) : (
-                <Sun size={14} className="text-yellow-500" />
-              )}
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Notification Sounds */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 mb-6 shadow-sm`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
-          <Volume2 size={20} className="text-accent" />
-          Notification Sound
-        </h2>
-        <p className={`text-sm mb-4 ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>Choose your preferred alarm sound</p>
-        
-        {/* Background Notifications Info */}
-        <div className={`mb-4 p-3 rounded-lg ${
-          hasNotificationPermission 
-            ? isDarkTheme ? 'bg-green-500/10 border border-green-500/20' : 'bg-green-50/80 border border-green-200/60'
-            : isDarkTheme ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-yellow-50/80 border border-yellow-200/60'
-        }`}>
-          <div className="flex items-start gap-2">
-            {hasNotificationPermission ? (
-              <CheckCircle2 size={18} className="text-green-500 mt-0.5" />
-            ) : (
-              <AlertTriangle size={18} className="text-yellow-500 mt-0.5" />
-            )}
-            <div>
-              <p className={`text-sm font-medium ${
-                hasNotificationPermission 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : 'text-yellow-600 dark:text-yellow-400'
-              }`}>
-                {hasNotificationPermission ? '✓ Background Notifications Enabled' : '⚠ Background Notifications Disabled'}
-              </p>
-              <p className={`text-xs mt-1 ${isDarkTheme ? 'text-slate-400' : 'text-stone-500'}`}>
-                {hasNotificationPermission 
-                  ? 'Timer akan notify kau even bila multitask atau switch tab/app lain' 
-                  : 'Allow notifications untuk dapat alert bila timer habis walaupun tak buka tab'}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="space-y-3">
-          {NOTIFICATION_SOUNDS.map((sound) => (
-            <button
-              key={sound.id}
-              onClick={() => {
-                setSelectedSound(sound.id);
-                playSound(sound.id, true); // Preview sound
-              }}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
-                selectedSound === sound.id
-                  ? isDarkTheme ? 'bg-accent/10 border-accent/30 text-white' : 'bg-emerald-50 border-emerald-300/50 text-stone-800'
-                  : isDarkTheme 
-                    ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
-                    : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-stone-100/80'
-              }`}
-            >
-              <div className="text-left">
-                <p className="font-medium">{sound.name}</p>
-                <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>{sound.description}</p>
-              </div>
-              {selectedSound === sound.id && (
-                <Check size={20} className="text-accent" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Data Management */}
-      <div className={`${isDarkTheme ? 'bg-surface/40 border-white/5' : 'bg-white/70 border-stone-200/60'} backdrop-blur-lg border rounded-2xl p-6 shadow-sm`}>
-        <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${isDarkTheme ? 'text-white' : 'text-stone-800'}`}>
-          <Trash2 size={20} className="text-red-400" />
-          Data Management
-        </h2>
-        
-        <div className="space-y-3">
-          <button
-            onClick={() => {
-              resetStats();
-              showToast('success', 'Stats Reset! ✨', 'Today\'s stats have been cleared successfully.');
-            }}
-            className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
-              isDarkTheme 
-                ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
-                : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-stone-100/80'
-            }`}
-          >
-            <div className="text-left">
-              <p className="font-medium">Reset Today's Stats</p>
-              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>Clear session count and focus time for today</p>
-            </div>
-            <RotateCcw size={18} />
-          </button>
-          
-          <button
-            onClick={() => {
-              if (confirm('Are you sure you want to clear all session history?')) {
-                clearHistory();
-                showToast('warning', 'History Cleared! 🗑️', 'All session records have been permanently deleted.');
-              }
-            }}
-            className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
-              isDarkTheme 
-                ? 'bg-white/5 border-white/5 text-slate-300 hover:bg-red-500/10 hover:border-red-500/20'
-                : 'bg-stone-50/80 border-stone-200/60 text-stone-700 hover:bg-red-50/80 hover:border-red-300/60'
-            }`}
-          >
-            <div className="text-left">
-              <p className="font-medium">Clear All History</p>
-              <p className={`text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>Permanently delete all session records</p>
-            </div>
-            <Trash2 size={18} className="text-red-400" />
-          </button>
-        </div>
-      </div>
-
-      {/* App Info */}
-      <div className={`mt-8 text-center text-sm ${isDarkTheme ? 'text-slate-500' : 'text-stone-400'}`}>
-        <p>Ihsan Productivity Timer v1.1</p>
-        <p className="mt-1">Built with ❤️ for deep work</p>
-      </div>
-    </div>
-  );
 
   return (
     <div className={`h-[100dvh] ${isDarkTheme ? 'bg-gradient-to-br from-[#020617] via-[#050608] to-[#0a0f1c]' : 'bg-gradient-to-br from-stone-100 via-amber-50/30 to-stone-50'} text-white flex flex-col md:flex-row font-sans selection:bg-accent selection:text-black overflow-hidden`}>
-      
+
       {/* Navigation */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDarkTheme={isDarkTheme} />
-      
+
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative pt-[env(safe-area-inset-top)] pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
         {/* Background Grid Decoration */}
-        <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]" 
-             style={{ 
+        <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.03]"
+             style={{
                backgroundImage: `linear-gradient(${isDarkTheme ? '#fff' : '#000'} 1px, transparent 1px), linear-gradient(90deg, ${isDarkTheme ? '#fff' : '#000'} 1px, transparent 1px)`,
                backgroundSize: '40px 40px'
              }}>
@@ -1289,7 +126,25 @@ const App: React.FC = () => {
         {activeTab === 'settings' ? (
           /* Settings Page */
           <div className="flex-1 overflow-y-auto">
-            <SettingsPage />
+            <SettingsPage
+              isDarkTheme={isDarkTheme}
+              onToggleTheme={() => setIsDarkTheme(prev => !prev)}
+              streak={tracking.streak}
+              selectedSound={selectedSound}
+              onSelectSound={(sound) => {
+                setSelectedSound(sound);
+                alarm.previewSound(sound);
+              }}
+              hasNotificationPermission={notifications.hasPermission}
+              onResetStats={() => {
+                tracking.resetStats();
+                notifications.notify('success', 'Stats Reset! ✨', 'Today\'s stats have been cleared successfully.', { system: false });
+              }}
+              onClearHistory={() => {
+                tracking.clearHistory();
+                notifications.notify('warning', 'History Cleared! 🗑️', 'All session records have been permanently deleted.', { system: false });
+              }}
+            />
           </div>
         ) : activeTab === 'chunking' ? (
           /* Chunking Page */
@@ -1304,50 +159,50 @@ const App: React.FC = () => {
           /* Dashboard / Timer Page */
           <>
             <Header focusTask={focusTask} setFocusTask={setFocusTask} isDarkTheme={isDarkTheme} />
-            
+
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
               <div className="max-w-[1600px] mx-auto p-4 md:p-10 min-h-full flex flex-col lg:flex-row gap-8 lg:items-center justify-center">
-                
+
                 {/* Center Timer Area */}
                 <div className="flex-1 flex justify-center items-center py-2 md:py-8 lg:py-0 order-1 lg:order-1">
-                   <TimerDisplay 
-                     mode={mode} 
-                     setMode={setMode} 
-                     phase={phase}
-                     isRunning={isRunning}
-                     setIsRunning={setIsRunning}
-                     timeLeft={timeLeft}
-                     onSkip={skipPhase}
-                     onReset={resetTimer}
-                     isAlarmPlaying={isAlarmPlaying}
-                     onStopAlarm={stopAlarm}
-                     customFocusTime={customFocusTime}
-                     customBreakTime={customBreakTime}
-                     setCustomFocusTime={setCustomFocusTime}
-                     setCustomBreakTime={setCustomBreakTime}
+                   <TimerDisplay
+                     mode={timer.mode}
+                     setMode={timer.setMode}
+                     phase={timer.phase}
+                     isRunning={timer.isRunning}
+                     setIsRunning={timer.setIsRunning}
+                     timeLeft={timer.timeLeft}
+                     onSkip={timer.skip}
+                     onReset={timer.reset}
+                     isAlarmPlaying={alarm.isAlarmPlaying}
+                     onStopAlarm={alarm.stopAlarm}
+                     customFocusTime={timer.customFocusTime}
+                     customBreakTime={timer.customBreakTime}
+                     setCustomFocusTime={timer.setCustomFocusTime}
+                     setCustomBreakTime={timer.setCustomBreakTime}
                      isDarkTheme={isDarkTheme}
-                     onUnlockAudio={unlockAudioContext}
+                     onUnlockAudio={alarm.unlockAudio}
                    />
                 </div>
 
                 {/* Right Info Panel */}
                 <div className="flex-shrink-0 order-2 lg:order-2">
-                   <StatsPanel 
-                     stats={stats} 
-                     todaySessions={todaySessions}
-                     sessionHistory={sessionHistory}
-                     onResetStats={resetStats}
-                     onUpdateDailyGoal={updateDailyGoal}
-                     onClearHistory={clearHistory}
+                   <StatsPanel
+                     stats={tracking.stats}
+                     todaySessions={tracking.todaySessions}
+                     sessionHistory={tracking.sessionHistory}
+                     onResetStats={tracking.resetStats}
+                     onUpdateDailyGoal={tracking.updateDailyGoal}
+                     onClearHistory={tracking.clearHistory}
                      focusTask={focusTask}
-                     streak={streak}
+                     streak={tracking.streak}
                      isDarkTheme={isDarkTheme}
                    />
                 </div>
 
               </div>
             </div>
-            
+
             {/* Keyboard Shortcuts Hint */}
             <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 hidden md:flex items-center gap-4 text-xs ${isDarkTheme ? 'text-slate-500' : 'text-stone-500'}`}>
               <span><kbd className={`px-1.5 py-0.5 rounded border ${isDarkTheme ? 'bg-white/5 border-white/10' : 'bg-stone-200/80 border-stone-300/60'}`}>Space</kbd> Start/Pause</span>
@@ -1358,152 +213,11 @@ const App: React.FC = () => {
           </>
         )}
       </main>
-      
-      {/* Toast Notifications */}
+
       {/* PWA Install Prompt - positioned at bottom left, non-intrusive */}
       <InstallPrompt />
 
-      <div className="fixed left-4 right-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] md:left-auto md:right-6 md:bottom-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
-        {toasts.map((toast, index) => (
-          <div
-            key={toast.id}
-            className="pointer-events-auto animate-slide-in"
-            style={{
-              animation: 'slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              animationDelay: `${index * 50}ms`,
-            }}
-          >
-            <div
-              className={`relative overflow-hidden rounded-2xl shadow-2xl backdrop-blur-xl w-full md:w-auto md:min-w-[320px] max-w-[400px] ${
-                toast.type === 'focus-complete'
-                  ? 'bg-gradient-to-r from-emerald-500/90 via-green-500/90 to-teal-500/90'
-                  : toast.type === 'break-complete'
-                  ? 'bg-gradient-to-r from-violet-500/90 via-purple-500/90 to-fuchsia-500/90'
-                  : toast.type === 'success'
-                  ? 'bg-gradient-to-r from-cyan-500/90 via-blue-500/90 to-indigo-500/90'
-                  : toast.type === 'warning'
-                  ? 'bg-gradient-to-r from-amber-500/90 via-orange-500/90 to-red-500/90'
-                  : 'bg-gradient-to-r from-blue-500/90 via-cyan-500/90 to-teal-500/90'
-              }`}
-            >
-              {/* Shimmer effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shimmer" />
-              
-              {/* Glow effect */}
-              <div className={`absolute -inset-1 blur-xl opacity-50 ${
-                toast.type === 'focus-complete'
-                  ? 'bg-emerald-400'
-                  : toast.type === 'break-complete'
-                  ? 'bg-violet-400'
-                  : toast.type === 'success'
-                  ? 'bg-cyan-400'
-                  : toast.type === 'warning'
-                  ? 'bg-amber-400'
-                  : 'bg-blue-400'
-              }`} />
-              
-              <div className="relative p-4 flex items-start gap-4">
-                {/* Icon with pulse */}
-                <div className={`flex-shrink-0 p-3 rounded-xl bg-white/20 backdrop-blur-sm ${
-                  toast.type === 'focus-complete' ? 'animate-bounce-soft' : 'animate-pulse-soft'
-                }`}>
-                  <div className="text-white drop-shadow-lg">
-                    {toast.icon}
-                  </div>
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0 pt-1">
-                  <h4 className="text-white font-bold text-lg tracking-tight drop-shadow-sm">
-                    {toast.title}
-                  </h4>
-                  <p className="text-white/90 text-sm mt-0.5 leading-relaxed">
-                    {toast.message}
-                  </p>
-                </div>
-                
-                {/* Close button */}
-                <button
-                  onClick={() => dismissToast(toast.id)}
-                  className="flex-shrink-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 hover:scale-110 active:scale-95 group"
-                >
-                  <X className="w-4 h-4 text-white/80 group-hover:text-white transition-colors" />
-                </button>
-              </div>
-              
-              {/* Progress bar */}
-              <div className="h-1 bg-black/10">
-                <div 
-                  className="h-full bg-white/40 animate-progress"
-                  style={{ animation: 'progress 5s linear forwards' }}
-                />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      {/* Toast Animation Styles */}
-      <style>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(100%) scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-        }
-        
-        @keyframes shimmer {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(200%);
-          }
-        }
-        
-        @keyframes progress {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
-        }
-        
-        @keyframes bounce-soft {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-4px);
-          }
-        }
-        
-        @keyframes pulse-soft {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.8;
-          }
-        }
-        
-        .animate-shimmer {
-          animation: shimmer 2s ease-in-out infinite;
-        }
-        
-        .animate-bounce-soft {
-          animation: bounce-soft 1s ease-in-out infinite;
-        }
-        
-        .animate-pulse-soft {
-          animation: pulse-soft 2s ease-in-out infinite;
-        }
-      `}</style>
+      <ToastStack toasts={notifications.toasts} dismiss={notifications.dismiss} />
     </div>
   );
 };
